@@ -1,17 +1,55 @@
 from fastapi import FastAPI, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from fastapi.websockets import WebSocket, WebSocketDisconnect
 from contextlib import asynccontextmanager
 from typing import List, Optional, Dict, Any
 import logging
 from datetime import datetime
+import json
+import csv
+import io
 
 from models.listing import ListingResponse, Listing
 from utils.database import async_db
+from utils.proxies import proxy_rotator
+from utils.alerting import alert_manager
 from config.settings import settings
 
 # Configure logging
 logging.basicConfig(level=settings.log_level)
 logger = logging.getLogger(__name__)
+
+
+class ConnectionManager:
+    """WebSocket connection manager for real-time updates."""
+    
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+    
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        logger.info(f"WebSocket connection established. Total connections: {len(self.active_connections)}")
+    
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+        logger.info(f"WebSocket connection closed. Total connections: {len(self.active_connections)}")
+    
+    async def send_personal_message(self, message: str, websocket: WebSocket):
+        await websocket.send_text(message)
+    
+    async def broadcast_message(self, message: str):
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(message)
+            except Exception as e:
+                logger.error(f"Error broadcasting message: {e}")
+                # Remove broken connections
+                self.active_connections.remove(connection)
+
+
+manager = ConnectionManager()
 
 
 @asynccontextmanager
@@ -80,6 +118,10 @@ async def get_listings(
     min_area: Optional[float] = Query(None, ge=0, description="Minimum area in sqm"),
     max_area: Optional[float] = Query(None, ge=0, description="Maximum area in sqm"),
     source_site: Optional[str] = Query(None, description="Filter by source site"),
+    date_from: Optional[datetime] = Query(None, description="Filter listings scraped after this date (ISO format)"),
+    date_to: Optional[datetime] = Query(None, description="Filter listings scraped before this date (ISO format)"),
+    posted_from: Optional[datetime] = Query(None, description="Filter listings posted after this date (ISO format)"),
+    posted_to: Optional[datetime] = Query(None, description="Filter listings posted before this date (ISO format)"),
     sort_by: str = Query("scraped_at", description="Field to sort by"),
     sort_order: str = Query("desc", regex="^(asc|desc)$", description="Sort order")
 ):
@@ -114,6 +156,24 @@ async def get_listings(
         
         if source_site:
             filter_query["source_site"] = source_site
+        
+        # Date filtering for scraped_at
+        if date_from is not None or date_to is not None:
+            scraped_filter = {}
+            if date_from is not None:
+                scraped_filter["$gte"] = date_from
+            if date_to is not None:
+                scraped_filter["$lte"] = date_to
+            filter_query["scraped_at"] = scraped_filter
+        
+        # Date filtering for posted_date
+        if posted_from is not None or posted_to is not None:
+            posted_filter = {}
+            if posted_from is not None:
+                posted_filter["$gte"] = posted_from
+            if posted_to is not None:
+                posted_filter["$lte"] = posted_to
+            filter_query["posted_date"] = posted_filter
         
         # Build sort order
         sort_direction = 1 if sort_order == "asc" else -1
@@ -251,6 +311,365 @@ async def get_statistics():
         
     except Exception as e:
         logger.error(f"Error fetching statistics: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/export/csv")
+async def export_listings_csv(
+    city: Optional[str] = Query(None, description="Filter by city"),
+    property_type: Optional[str] = Query(None, description="Filter by property type"),
+    min_price: Optional[float] = Query(None, ge=0, description="Minimum price"),
+    max_price: Optional[float] = Query(None, ge=0, description="Maximum price"),
+    min_area: Optional[float] = Query(None, ge=0, description="Minimum area in sqm"),
+    max_area: Optional[float] = Query(None, ge=0, description="Maximum area in sqm"),
+    source_site: Optional[str] = Query(None, description="Filter by source site"),
+    date_from: Optional[datetime] = Query(None, description="Filter listings scraped after this date"),
+    date_to: Optional[datetime] = Query(None, description="Filter listings scraped before this date"),
+    limit: int = Query(10000, ge=1, le=50000, description="Maximum number of listings to export")
+):
+    """Export listings to CSV format."""
+    try:
+        collection = async_db.get_collection("listings")
+        
+        # Build filter query (reuse logic from get_listings)
+        filter_query = {}
+        
+        if city:
+            filter_query["city"] = {"$regex": city, "$options": "i"}
+        if property_type:
+            filter_query["property_type"] = {"$regex": property_type, "$options": "i"}
+        if min_price is not None or max_price is not None:
+            price_filter = {}
+            if min_price is not None:
+                price_filter["$gte"] = min_price
+            if max_price is not None:
+                price_filter["$lte"] = max_price
+            filter_query["price"] = price_filter
+        if min_area is not None or max_area is not None:
+            area_filter = {}
+            if min_area is not None:
+                area_filter["$gte"] = min_area
+            if max_area is not None:
+                area_filter["$lte"] = max_area
+            filter_query["area_sqm"] = area_filter
+        if source_site:
+            filter_query["source_site"] = source_site
+        if date_from is not None or date_to is not None:
+            scraped_filter = {}
+            if date_from is not None:
+                scraped_filter["$gte"] = date_from
+            if date_to is not None:
+                scraped_filter["$lte"] = date_to
+            filter_query["scraped_at"] = scraped_filter
+        
+        # Get listings
+        cursor = collection.find(filter_query).sort("scraped_at", -1).limit(limit)
+        listings = await cursor.to_list(length=limit)
+        
+        # Create CSV content
+        output = io.StringIO()
+        if listings:
+            fieldnames = ['listing_id', 'title', 'price', 'area_sqm', 'property_type', 
+                         'city', 'district', 'address', 'source_site', 'url', 'scraped_at', 'posted_date']
+            writer = csv.DictWriter(output, fieldnames=fieldnames)
+            writer.writeheader()
+            
+            for listing in listings:
+                row = {field: listing.get(field, '') for field in fieldnames}
+                # Convert datetime objects to strings
+                if row['scraped_at']:
+                    row['scraped_at'] = row['scraped_at'].isoformat() if isinstance(row['scraped_at'], datetime) else str(row['scraped_at'])
+                if row['posted_date']:
+                    row['posted_date'] = row['posted_date'].isoformat() if isinstance(row['posted_date'], datetime) else str(row['posted_date'])
+                writer.writerow(row)
+        
+        output.seek(0)
+        
+        return StreamingResponse(
+            io.BytesIO(output.getvalue().encode('utf-8')),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=listings_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"}
+        )
+        
+    except Exception as e:
+        logger.error(f"Error exporting listings to CSV: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/export/json")
+async def export_listings_json(
+    city: Optional[str] = Query(None, description="Filter by city"),
+    property_type: Optional[str] = Query(None, description="Filter by property type"),
+    min_price: Optional[float] = Query(None, ge=0, description="Minimum price"),
+    max_price: Optional[float] = Query(None, ge=0, description="Maximum price"),
+    min_area: Optional[float] = Query(None, ge=0, description="Minimum area in sqm"),
+    max_area: Optional[float] = Query(None, ge=0, description="Maximum area in sqm"),
+    source_site: Optional[str] = Query(None, description="Filter by source site"),
+    date_from: Optional[datetime] = Query(None, description="Filter listings scraped after this date"),
+    date_to: Optional[datetime] = Query(None, description="Filter listings scraped before this date"),
+    limit: int = Query(10000, ge=1, le=50000, description="Maximum number of listings to export")
+):
+    """Export listings to JSON format."""
+    try:
+        collection = async_db.get_collection("listings")
+        
+        # Build filter query (same as CSV export)
+        filter_query = {}
+        
+        if city:
+            filter_query["city"] = {"$regex": city, "$options": "i"}
+        if property_type:
+            filter_query["property_type"] = {"$regex": property_type, "$options": "i"}
+        if min_price is not None or max_price is not None:
+            price_filter = {}
+            if min_price is not None:
+                price_filter["$gte"] = min_price
+            if max_price is not None:
+                price_filter["$lte"] = max_price
+            filter_query["price"] = price_filter
+        if min_area is not None or max_area is not None:
+            area_filter = {}
+            if min_area is not None:
+                area_filter["$gte"] = min_area
+            if max_area is not None:
+                area_filter["$lte"] = max_area
+            filter_query["area_sqm"] = area_filter
+        if source_site:
+            filter_query["source_site"] = source_site
+        if date_from is not None or date_to is not None:
+            scraped_filter = {}
+            if date_from is not None:
+                scraped_filter["$gte"] = date_from
+            if date_to is not None:
+                scraped_filter["$lte"] = date_to
+            filter_query["scraped_at"] = scraped_filter
+        
+        # Get listings
+        cursor = collection.find(filter_query).sort("scraped_at", -1).limit(limit)
+        listings = await cursor.to_list(length=limit)
+        
+        # Convert to JSON-serializable format
+        json_listings = []
+        for listing in listings:
+            listing["id"] = str(listing["_id"])
+            del listing["_id"]
+            # Convert datetime objects to ISO strings
+            for field in ['scraped_at', 'posted_date']:
+                if field in listing and listing[field]:
+                    if isinstance(listing[field], datetime):
+                        listing[field] = listing[field].isoformat()
+            json_listings.append(listing)
+        
+        json_content = json.dumps({
+            "export_date": datetime.now().isoformat(),
+            "total_listings": len(json_listings),
+            "filters_applied": {
+                "city": city,
+                "property_type": property_type,
+                "min_price": min_price,
+                "max_price": max_price,
+                "min_area": min_area,
+                "max_area": max_area,
+                "source_site": source_site,
+                "date_from": date_from.isoformat() if date_from else None,
+                "date_to": date_to.isoformat() if date_to else None
+            },
+            "listings": json_listings
+        }, indent=2)
+        
+        return StreamingResponse(
+            io.BytesIO(json_content.encode('utf-8')),
+            media_type="application/json",
+            headers={"Content-Disposition": f"attachment; filename=listings_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"}
+        )
+        
+    except Exception as e:
+        logger.error(f"Error exporting listings to JSON: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for real-time updates."""
+    await manager.connect(websocket)
+    try:
+        while True:
+            # Keep connection alive and listen for client messages
+            data = await websocket.receive_text()
+            
+            # Handle different message types
+            try:
+                message = json.loads(data)
+                message_type = message.get("type", "")
+                
+                if message_type == "ping":
+                    await manager.send_personal_message(
+                        json.dumps({"type": "pong", "timestamp": datetime.now().isoformat()}),
+                        websocket
+                    )
+                elif message_type == "subscribe":
+                    # Client wants to subscribe to updates
+                    await manager.send_personal_message(
+                        json.dumps({
+                            "type": "subscribed",
+                            "message": "Subscribed to real-time listing updates",
+                            "timestamp": datetime.now().isoformat()
+                        }),
+                        websocket
+                    )
+                else:
+                    await manager.send_personal_message(
+                        json.dumps({
+                            "type": "error",
+                            "message": f"Unknown message type: {message_type}",
+                            "timestamp": datetime.now().isoformat()
+                        }),
+                        websocket
+                    )
+            except json.JSONDecodeError:
+                # Handle plain text messages
+                await manager.send_personal_message(
+                    json.dumps({
+                        "type": "echo",
+                        "message": f"Received: {data}",
+                        "timestamp": datetime.now().isoformat()
+                    }),
+                    websocket
+                )
+                
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+        logger.info("WebSocket client disconnected")
+
+
+async def broadcast_new_listing(listing_data: dict):
+    """Function to broadcast new listings to all connected WebSocket clients."""
+    if manager.active_connections:
+        message = json.dumps({
+            "type": "new_listing",
+            "data": listing_data,
+            "timestamp": datetime.now().isoformat()
+        })
+        await manager.broadcast_message(message)
+
+
+@app.get("/proxy/stats")
+async def get_proxy_statistics():
+    """Get proxy rotation statistics and health information."""
+    try:
+        if not proxy_rotator.proxy_list:
+            return {
+                "message": "No proxies configured",
+                "proxy_rotation_enabled": settings.rotate_proxies,
+                "proxy_count": 0
+            }
+        
+        stats = proxy_rotator.get_proxy_statistics()
+        stats["proxy_rotation_enabled"] = settings.rotate_proxies
+        stats["health_check_interval"] = settings.proxy_health_check_interval
+        stats["max_retries"] = settings.max_proxy_retries
+        
+        return stats
+        
+    except Exception as e:
+        logger.error(f"Error fetching proxy statistics: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/monitoring/dead-letter-queue")
+async def get_dead_letter_queue_stats():
+    """Get dead letter queue statistics and failed requests."""
+    try:
+        from spiders.middlewares import retry_middleware_instance
+        
+        if not retry_middleware_instance:
+            return {
+                "message": "Retry middleware not initialized",
+                "stats": {"total": 0, "by_reason": {}, "by_spider": {}, "items": []}
+            }
+        
+        stats = retry_middleware_instance.get_dead_letter_stats()
+        return {
+            "message": "Dead letter queue statistics",
+            "stats": stats
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching dead letter queue stats: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/monitoring/alerts")
+async def get_recent_alerts(limit: int = Query(50, ge=1, le=200)):
+    """Get recent alerts and alert summary."""
+    try:
+        alerts = alert_manager.get_recent_alerts(limit)
+        summary = alert_manager.get_alert_summary()
+        
+        return {
+            "alerts": alerts,
+            "summary": summary
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching alerts: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.post("/monitoring/check-alerts")
+async def trigger_alert_check():
+    """Manually trigger alert checking."""
+    try:
+        alert_manager.check_and_send_alerts()
+        return {"message": "Alert check completed"}
+        
+    except Exception as e:
+        logger.error(f"Error running alert check: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/monitoring/health")
+async def get_system_health():
+    """Get comprehensive system health information."""
+    try:
+        health_data = {
+            "timestamp": datetime.now().isoformat(),
+            "database": "unknown",
+            "proxy_health": {},
+            "dead_letter_queue": {},
+            "alerts": {}
+        }
+        
+        # Database health
+        try:
+            await async_db.client.admin.command('ping')
+            health_data["database"] = "healthy"
+        except Exception as e:
+            health_data["database"] = f"unhealthy: {str(e)}"
+        
+        # Proxy health (if configured)
+        if proxy_rotator.proxy_list:
+            health_data["proxy_health"] = proxy_rotator.get_proxy_statistics()
+        else:
+            health_data["proxy_health"] = {"message": "No proxies configured"}
+        
+        # Dead letter queue health
+        try:
+            from spiders.middlewares import retry_middleware_instance
+            if retry_middleware_instance:
+                health_data["dead_letter_queue"] = retry_middleware_instance.get_dead_letter_stats()
+            else:
+                health_data["dead_letter_queue"] = {"message": "Retry middleware not initialized"}
+        except Exception as e:
+            health_data["dead_letter_queue"] = {"error": str(e)}
+        
+        # Alert summary
+        health_data["alerts"] = alert_manager.get_alert_summary()
+        
+        return health_data
+        
+    except Exception as e:
+        logger.error(f"Error fetching system health: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

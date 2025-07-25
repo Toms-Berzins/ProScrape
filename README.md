@@ -1,25 +1,187 @@
-# ProScrape
+# ProScrape - Latvian Real Estate Aggregator
 
-To adapt your pipeline to these specific sites you need to account for how each site loads its data and what anti‑scraping measures are in place.  Here’s a concise set of changes:
+A comprehensive web scraping pipeline and frontend for aggregating real estate listings from Latvia's top property websites.
 
-1. **Site‑specific spiders**
+## 🏗️ Architecture
 
-   * **ss.com/en/real‑estate/** – The listings page is mostly static HTML, with categories for flats, houses, land, etc.  You can scrape this site with a standard HTTP client (Requests) or a Scrapy spider and parse the links and pagination with BeautifulSoup/XPath.  Include a realistic `User‑Agent` and rate‑limit your requests to avoid blocking.
-   * **city24.lv/en/** and **pp.lv/lv/landing/nekustamais‑ipasums** – Both sites rely heavily on JavaScript and display cookie‑consent pop‑ups.  Static requests won’t see the listing data; you either need to (a) automate a browser to render the page or (b) look for the underlying JSON API calls used by their front‑end.  When content is loaded via JavaScript, dynamic scraping (Selenium/Playwright) is necessary.  Using Playwright’s headless mode with Scrapy’s `scrapy-playwright` plugin allows you to render pages and click “Accept” on cookie banners programmatically.  If you find an API endpoint (e.g., search results JSON), call it directly and skip browser automation.
+```
+ProScrape/
+├── spiders/              # Scrapy spiders for data collection
+├── models/               # Pydantic data models
+├── api/                  # FastAPI backend application
+├── frontend/             # SvelteKit frontend application
+├── tasks/                # Celery task queue
+├── utils/                # Database, proxies, normalization
+└── config/               # Environment configuration
+```
 
-2. **Proxy rotation and anti‑bot measures**
-   All three sites serve a Latvian audience and may block repeated requests from a single IP.  Implement proxy rotation and randomised request headers to avoid bans.  For dynamic sites, configure Playwright/Selenium to use the same rotating proxies.  Prepare to handle captchas or honeypot links if they appear.
+## 🎯 Target Sites
 
-3. **Async task queue and scheduling**
-   Instead of running scrapers as one‑off scripts, push each site’s spider into a background job queue (Celery or RQ).  Celery plus a broker like RabbitMQ/Redis provides automatic retries, backoff and real‑time monitoring, which is essential when scrapers fail or get blocked.  Schedule tasks via Celery Beat rather than cron so you can control frequency per site.
+- **ss.com/en/real-estate/** - Static HTML scraping with BeautifulSoup/XPath
+- **city24.lv/en/** - Dynamic JavaScript scraping with Playwright
+- **pp.lv/lv/landing/nekustamais-ipasums** - Dynamic JavaScript scraping with Playwright
 
-4. **Data extraction and normalisation**
-   For each site’s spider, extract fields that correspond to your unified schema (e.g., listing\_id, title, price, area, coordinates, features, posted\_date, image\_urls).  Normalize currencies to EUR and parse numbers with locale awareness.  Use unique indexes on `listing_id` in MongoDB to prevent duplicates.  Implement Pydantic models to validate the fields before insertion.
+## ✅ Current Status
 
-5. **Dynamic/static split**
-   Identify whether each page’s content is visible in the raw HTML.  If it is, stick with static scraping for speed and simplicity; if not, use dynamic scraping.  This rule of thumb helps you choose the right tool for each endpoint.
+### Backend (✅ Complete)
+- **Scrapy Spiders** - All three site scrapers implemented and tested
+- **FastAPI API** - Full REST API with pagination, filtering, export
+- **MongoDB Storage** - Atlas cluster with data validation
+- **Celery Tasks** - Background job processing with Redis
+- **Proxy Rotation** - Intelligent proxy health monitoring
+- **Error Handling** - Dead letter queues and alerting system
+- **WebSocket Support** - Real-time updates for live data
 
-6. **API layer and ODM**
-   Continue using FastAPI to expose your scraped data.  Leverage Motor (async MongoDB driver) with Pydantic models to keep the API responsive and schema‑validated.  Add endpoints to fetch listings by city, price range, or other filters, and implement pagination.
+### Frontend (✅ Complete - Basic)
+- **SvelteKit + TypeScript** - Modern web framework setup
+- **TailwindCSS** - Responsive design system
+- **API Integration** - Full REST client and WebSocket manager
+- **Component Library** - Listing cards, grids, layout components
+- **Type Safety** - Complete TypeScript coverage
+- **Development Ready** - Environment configuration and build system
 
-With these adjustments—site‑specific spiders, dynamic rendering where needed, proxy management, queued tasks, and a unified data model—you’ll be able to scrape ss.com, city24.lv, and pp.lv reliably and store the data consistently in MongoDB.
+## 🚀 Quick Start
+
+### Backend Setup
+```bash
+# Install dependencies
+pip install -r requirements.txt
+python -m playwright install chromium
+
+# Start services
+start_redis.bat                    # Redis server
+python run.py api                  # FastAPI server
+python run.py worker               # Celery worker
+python run.py beat                 # Celery scheduler
+
+# Test scrapers
+python -m scrapy crawl ss_spider
+python -m scrapy crawl city24_spider
+python -m scrapy crawl pp_spider
+```
+
+### Frontend Setup
+```bash
+cd frontend
+npm install
+npm run dev                        # Development server on :3000
+```
+
+## 🔧 Configuration
+
+### Environment Variables
+```env
+# Backend (.env)
+MONGODB_URL=mongodb+srv://...
+REDIS_URL=redis://localhost:6379
+LOG_LEVEL=INFO
+
+# Frontend (frontend/.env)
+VITE_API_URL=http://localhost:8000
+VITE_WS_URL=ws://localhost:8000/ws
+```
+
+## 📊 API Endpoints
+
+### Core Endpoints
+- `GET /` - API root
+- `GET /health` - Health check
+- `GET /listings` - Paginated listings with filters
+- `GET /listings/{id}` - Individual listing details
+- `GET /listings/search` - Text search
+- `GET /stats` - Database statistics
+
+### Real-time & Export
+- `WebSocket /ws` - Live listing updates
+- `GET /export/csv` - CSV export with filtering
+- `GET /export/json` - JSON export with filtering
+
+### Monitoring
+- `GET /proxy/stats` - Proxy health statistics
+- `GET /monitoring/health` - System health check
+- `GET /monitoring/alerts` - Alert system status
+
+## 🎨 Frontend Features
+
+### Implemented
+- **Homepage** - Hero section with search and stats
+- **Listings Page** - Grid/list view with infinite scroll
+- **Navigation** - Responsive header with mobile menu
+- **Property Cards** - Rich display with images and details
+- **Loading States** - Skeleton screens and error handling
+- **Type Safety** - Full TypeScript integration
+
+### Planned
+- **Advanced Search** - Multi-criteria filtering interface
+- **Individual Listings** - Detailed property pages with galleries
+- **Map Integration** - Leaflet-based geographic search
+- **User Preferences** - Saved listings and alerts
+- **Real-time Updates** - WebSocket integration for live data
+
+## 🛠️ Development
+
+### Backend Testing
+```bash
+python test_connection.py          # MongoDB connectivity
+python test_celery_worker.py       # Celery worker health
+pytest tests/                      # Unit tests
+```
+
+### Frontend Development
+```bash
+cd frontend
+npm run dev                        # Development server
+npm run build                      # Production build
+npm run check                      # Type checking
+```
+
+## 🔄 Deployment
+
+### Production Setup
+```bash
+# Docker deployment
+docker-compose -f docker-compose.redis.yml up -d
+
+# Manual deployment
+# See DEPLOYMENT.md for detailed instructions
+```
+
+### Frontend Deployment
+Ready for deployment to:
+- Vercel (recommended)
+- Netlify
+- Static hosting
+- Node.js servers
+
+## 📈 Monitoring
+
+- **Flower** - Celery task monitoring on :5555
+- **System Health** - Comprehensive health checks
+- **Proxy Statistics** - Rotation and success rates
+- **Dead Letter Queue** - Failed item tracking
+- **Alert System** - Email/webhook notifications
+
+## 🔒 Security Features
+
+- **Proxy Rotation** - Intelligent IP management
+- **Rate Limiting** - Request throttling per site
+- **User-Agent Rotation** - Realistic browser simulation
+- **Error Handling** - Graceful failure recovery
+- **Data Validation** - Pydantic model validation
+
+## 📝 Documentation
+
+- **CLAUDE.md** - Comprehensive project documentation
+- **FRONTEND.md** - Frontend implementation plan
+- **DEPLOYMENT.md** - Production deployment guide
+
+## 🤝 Integration
+
+The system provides a complete real estate aggregation solution:
+1. **Data Collection** - Automated scraping from multiple sources
+2. **Data Processing** - Normalization and validation
+3. **API Layer** - RESTful access with real-time updates
+4. **Frontend Interface** - Modern web application for browsing
+5. **Monitoring** - Health checks and performance metrics
+
+Perfect for real estate platforms, property search engines, or market analysis tools.

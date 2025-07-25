@@ -173,21 +173,21 @@ All scrapers should extract data into a unified schema with these fields:
    - ✅ Test Celery worker connectivity
    - ✅ Verify task scheduling works with Celery Beat
 
-### Medium Priority
-4. **Enhance API Endpoints**
-   - Add filtering by date ranges
-   - Implement data export endpoints (CSV/JSON)
-   - Add websocket support for real-time updates
+### Medium Priority (COMPLETED)
+4. ✅ **Enhance API Endpoints**
+   - ✅ Add filtering by date ranges (date_from, date_to, posted_from, posted_to)
+   - ✅ Implement data export endpoints (CSV/JSON with /export/csv and /export/json)
+   - ✅ Add websocket support for real-time updates (/ws endpoint with connection manager)
 
-5. **Configure Proxy Rotation**
-   - Add proxy list to settings
-   - Test proxy health checking
-   - Implement automatic failover
+5. ✅ **Configure Proxy Rotation**
+   - ✅ Add proxy list to settings (enhanced with health monitoring settings)
+   - ✅ Test proxy health checking (background monitoring with statistics)
+   - ✅ Implement automatic failover (intelligent proxy selection with success rates)
 
-6. **Improve Error Handling**
-   - Add retry logic for failed requests
-   - Implement dead letter queue for failed items
-   - Set up alerting for critical failures
+6. ✅ **Improve Error Handling**
+   - ✅ Add retry logic for failed requests (exponential backoff with jitter)
+   - ✅ Implement dead letter queue for failed items (comprehensive failure tracking)
+   - ✅ Set up alerting for critical failures (email/webhook notifications)
 
 ### Low Priority
 7. **Create Monitoring Dashboard**
@@ -247,12 +247,27 @@ The system includes comprehensive testing utilities:
 
 ## API Endpoints
 
+### Core Endpoints
 - `GET /` - Root endpoint
 - `GET /health` - Health check
-- `GET /listings` - List listings with pagination and filters
+- `GET /listings` - List listings with pagination and filters (now includes date range filtering)
 - `GET /listings/{listing_id}` - Get specific listing
 - `GET /listings/search` - Search listings by text
 - `GET /stats` - Get database statistics
+
+### Export Endpoints
+- `GET /export/csv` - Export listings to CSV format with filtering
+- `GET /export/json` - Export listings to JSON format with filtering
+
+### Real-time Updates
+- `WebSocket /ws` - WebSocket endpoint for real-time listing updates
+
+### Monitoring Endpoints
+- `GET /proxy/stats` - Get proxy rotation statistics and health information
+- `GET /monitoring/dead-letter-queue` - Get dead letter queue statistics
+- `GET /monitoring/alerts` - Get recent alerts and alert summary
+- `POST /monitoring/check-alerts` - Manually trigger alert checking
+- `GET /monitoring/health` - Get comprehensive system health information
 
 ## Environment Variables
 

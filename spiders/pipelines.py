@@ -3,6 +3,7 @@ from itemadapter import ItemAdapter
 from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError
 import logging
+import asyncio
 from models.listing import ListingCreate
 from utils.normalization import normalize_listing_data
 
@@ -148,6 +149,15 @@ class MongoPipeline:
             
             if result.upserted_id:
                 spider.logger.info(f"Inserted new listing: {listing.listing_id}")
+                # Broadcast new listing via WebSocket (async call)
+                try:
+                    from api.main import broadcast_new_listing
+                    listing_data = update_data.copy()
+                    listing_data["id"] = str(result.upserted_id)
+                    # Run async function in thread pool since Scrapy is not async
+                    asyncio.create_task(broadcast_new_listing(listing_data))
+                except Exception as e:
+                    spider.logger.debug(f"WebSocket broadcast failed: {e}")
             else:
                 spider.logger.info(f"Updated existing listing: {listing.listing_id}")
             

@@ -24,7 +24,16 @@
       "Bash(start_redis.bat)",
       "Bash(cmd:*)",
       "Bash(celery:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(npm create:*)",
+      "Bash(npx sv create:*)",
+      "Bash(npm install)",
+      "Bash(npm install:*)",
+      "Bash(npx tailwindcss init:*)",
+      "Bash(./node_modules/.bin/tailwindcss:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npm run build:*)"
     ],
     "deny": []
   }

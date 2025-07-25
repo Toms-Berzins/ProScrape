@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     # Proxy settings
     proxy_list: Optional[List[str]] = None
     rotate_proxies: bool = False
+    proxy_test_url: str = "http://httpbin.org/ip"
+    proxy_test_timeout: int = 10
+    proxy_retry_delay: int = 60
+    max_proxy_retries: int = 3
+    proxy_health_check_interval: int = 300
     
     # Logging
     log_level: str = "INFO"

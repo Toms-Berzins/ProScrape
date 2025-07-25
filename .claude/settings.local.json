@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir /a C:UsersberziProScrape)",
+      "Bash(dir:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(test:*)",
+      "Bash(mkdir:*)",
+      "Bash(touch:*)",
+      "Bash(copy .env.example .env)",
+      "Bash(cp:*)",
+      "Bash(python:*)",
+      "Bash(venvScripts:*)",
+      "Bash(pip install:*)",
+      "Bash(venv/Scripts/activate:*)",
+      "Bash(playwright install:*)",
+      "Bash(pip show:*)",
+      "Bash(redis-server:*)",
+      "Bash(redis-cli:*)",
+      "Bash(winget search:*)",
+      "Bash(winget install:*)",
+      "Bash(docker:*)",
+      "Bash(start_redis.bat)",
+      "Bash(cmd:*)",
+      "Bash(celery:*)",
+      "Bash(rm:*)"
+    ],
+    "deny": []
+  }
+}

@@ -1,0 +1,118 @@
+version: '3.8'
+
+services:
+  # MongoDB database
+  mongodb:
+    image: mongo:7.0
+    container_name: proscrape_mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_INITDB_DATABASE: proscrape
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - proscrape_network
+
+  # Redis for Celery
+  redis:
+    image: redis:7.2-alpine
+    container_name: proscrape_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - proscrape_network
+
+  # FastAPI application
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: proscrape_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGODB_URL=mongodb://admin:password@mongodb:27017/proscrape?authSource=admin
+      - REDIS_URL=redis://redis:6379/0
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+    depends_on:
+      - mongodb
+      - redis
+    volumes:
+      - .:/app
+    networks:
+      - proscrape_network
+
+  # Celery worker
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: proscrape_celery_worker
+    restart: unless-stopped
+    command: celery -A tasks.celery_app worker --loglevel=info --concurrency=2
+    environment:
+      - MONGODB_URL=mongodb://admin:password@mongodb:27017/proscrape?authSource=admin
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - mongodb
+      - redis
+    volumes:
+      - .:/app
+    networks:
+      - proscrape_network
+
+  # Celery beat (scheduler)
+  celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: proscrape_celery_beat
+    restart: unless-stopped
+    command: celery -A tasks.celery_app beat --loglevel=info
+    environment:
+      - MONGODB_URL=mongodb://admin:password@mongodb:27017/proscrape?authSource=admin
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - mongodb
+      - redis
+    volumes:
+      - .:/app
+    networks:
+      - proscrape_network
+
+  # Celery flower (monitoring)
+  celery_flower:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: proscrape_flower
+    restart: unless-stopped
+    command: celery -A tasks.celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    environment:
+      - MONGODB_URL=mongodb://admin:password@mongodb:27017/proscrape?authSource=admin
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+    volumes:
+      - .:/app
+    networks:
+      - proscrape_network
+
+volumes:
+  mongodb_data:
+  redis_data:
+
+networks:
+  proscrape_network:
+    driver: bridge

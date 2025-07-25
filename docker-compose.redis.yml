@@ -1,0 +1,80 @@
+# Docker Compose for Redis setup (production)
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: proscrape_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --save 20 1 --loglevel warning --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - proscrape_network
+
+  # Celery Worker
+  celery_worker:
+    build: .
+    container_name: proscrape_celery_worker
+    restart: unless-stopped
+    depends_on:
+      - redis
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - MONGODB_URL=${MONGODB_URL}
+      - MONGODB_DATABASE=${MONGODB_DATABASE}
+    command: celery -A tasks.celery_app worker --loglevel=info --concurrency=2
+    networks:
+      - proscrape_network
+    volumes:
+      - ./logs:/app/logs
+
+  # Celery Beat (Scheduler)
+  celery_beat:
+    build: .
+    container_name: proscrape_celery_beat
+    restart: unless-stopped
+    depends_on:
+      - redis
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - MONGODB_URL=${MONGODB_URL}
+      - MONGODB_DATABASE=${MONGODB_DATABASE}
+    command: celery -A tasks.celery_app beat --loglevel=info
+    networks:
+      - proscrape_network
+    volumes:
+      - ./logs:/app/logs
+      - celery_beat_data:/app/celerybeat-schedule
+
+  # Celery Flower (Monitoring)
+  celery_flower:
+    build: .
+    container_name: proscrape_flower
+    restart: unless-stopped
+    depends_on:
+      - redis
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    command: celery -A tasks.celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    networks:
+      - proscrape_network
+
+volumes:
+  redis_data:
+    driver: local
+  celery_beat_data:
+    driver: local
+
+networks:
+  proscrape_network:
+    driver: bridge

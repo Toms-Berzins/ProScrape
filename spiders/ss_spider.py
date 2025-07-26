@@ -23,10 +23,21 @@ class SSSpider(BaseRealEstateSpider):
     ]
     
     custom_settings = {
-        'DOWNLOAD_DELAY': 1.5,
+        'DOWNLOAD_DELAY': 2,
         'RANDOMIZE_DOWNLOAD_DELAY': 0.5,
         'CONCURRENT_REQUESTS_PER_DOMAIN': 1,
         'COOKIES_ENABLED': True,
+        'DOWNLOADER_MIDDLEWARES': {
+            'scrapy.downloadermiddlewares.useragent.UserAgentMiddleware': None,
+            'scrapy.downloadermiddlewares.retry.RetryMiddleware': None,
+            'spiders.middlewares.EnhancedUserAgentMiddleware': None,
+            'spiders.middlewares.EnhancedProxyMiddleware': None,
+            'spiders.middlewares.EnhancedRetryMiddleware': None,
+        },
+        'ITEM_PIPELINES': {
+            'spiders.pipelines.ValidationPipeline': 300,
+            'spiders.pipelines.MongoPipeline': 500,
+        },
         'DEFAULT_REQUEST_HEADERS': {
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',

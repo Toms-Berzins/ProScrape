@@ -33,7 +33,10 @@
       "Bash(./node_modules/.bin/tailwindcss:*)",
       "Bash(npm run dev:*)",
       "Bash(npm uninstall:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(curl:*)",
+      "Bash(mv:*)",
+      "Bash(chmod:*)"
     ],
     "deny": []
   }

@@ -1,0 +1,150 @@
+# Development override for docker-compose.yml
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  # Redis - keep as is for development
+  redis:
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"  # Expose for Redis CLI debugging
+
+  # API with development settings
+  api:
+    build:
+      target: development
+    environment:
+      - API_DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174
+      - REDIS_URL=redis://redis:6379/0
+      - MONGODB_URL=${MONGODB_URL}
+      - MONGODB_DATABASE=${MONGODB_DATABASE}
+    volumes:
+      # Enable hot-reload by mounting more source directories
+      - ./api:/app/api
+      - ./models:/app/models
+      - ./utils:/app/utils
+      - ./config:/app/config
+      - ./tasks:/app/tasks
+      - ./tests:/app/tests
+    ports:
+      - "8000:8000"
+      - "5678:5678"  # Python debugger port
+    command: >
+      uvicorn api.main:app 
+      --host 0.0.0.0 
+      --port 8000 
+      --reload 
+      --reload-dir /app/api 
+      --reload-dir /app/models 
+      --reload-dir /app/utils
+      --reload-dir /app/config
+
+  # Single Celery worker for development
+  celery_worker:
+    environment:
+      - LOG_LEVEL=DEBUG
+      - CELERY_CONCURRENCY=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # Enable hot-reload for worker code
+      - ./spiders:/app/spiders
+      - ./tasks:/app/tasks
+      - ./utils:/app/utils
+      - ./models:/app/models
+      - ./config:/app/config
+    command: >
+      celery -A tasks.celery_app worker 
+      --loglevel=debug 
+      --concurrency=1
+      --autoscale=2,1
+      --time-limit=1800
+      --soft-time-limit=1500
+    deploy:
+      replicas: 1
+
+  # Flower for monitoring (always available in dev)
+  flower:
+    environment:
+      - FLOWER_BASIC_AUTH=admin:dev
+      - FLOWER_DEBUG=true
+    profiles: []  # Always include in dev
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+
+  # Grafana for monitoring dashboards
+  grafana:
+    image: grafana/grafana:10.1.0
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./docker/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=redis-datasource,mongodb-datasource
+    depends_on:
+      - prometheus
+
+  # Loki for log aggregation
+  loki:
+    image: grafana/loki:2.9.0
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./docker/monitoring/loki.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/tmp/loki
+    command: -config.file=/etc/loki/local-config.yaml
+
+  # Promtail for log collection
+  promtail:
+    image: grafana/promtail:2.9.0
+    restart: unless-stopped
+    volumes:
+      - ./docker/monitoring/promtail.yml:/etc/promtail/config.yml:ro
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+
+# Development-specific volumes
+volumes:
+  redis_data:
+    driver: local
+  mongodb_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${PWD}/docker/data/mongodb
+      o: bind
+  mongodb_config:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  loki_data:
+    driver: local

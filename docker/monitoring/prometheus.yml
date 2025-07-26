@@ -1,0 +1,70 @@
+# Prometheus configuration for ProScrape monitoring
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+# Load rules once and periodically evaluate them according to the global 'evaluation_interval'
+rule_files:
+  # - "alert_rules.yml"
+
+# A scrape configuration containing exactly one endpoint to scrape
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # ProScrape API
+  - job_name: 'proscrape-api'
+    static_configs:
+      - targets: ['api:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    scheme: http
+
+  # Redis metrics (via redis_exporter if installed)
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # MongoDB metrics (via mongodb_exporter if installed)
+  - job_name: 'mongodb'
+    static_configs:
+      - targets: ['mongodb:27017']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Celery Worker metrics (via celery_exporter if installed)
+  - job_name: 'celery-worker'
+    static_configs:
+      - targets: ['celery_worker:9540']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Flower metrics
+  - job_name: 'flower'
+    static_configs:
+      - targets: ['flower:5555']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Node/Container metrics (if node_exporter is running)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 30s
+
+  # cAdvisor for container metrics
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 30s

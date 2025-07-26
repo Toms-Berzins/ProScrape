@@ -1,0 +1,102 @@
+{
+  "manifest_version": 3,
+  "name": "ProScrape Real Estate Monitor",
+  "version": "1.0.0",
+  "description": "Monitor and interact with Latvian real estate listings through ProScrape API",
+  
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting",
+    "background",
+    "alarms"
+  ],
+  
+  "host_permissions": [
+    "http://localhost:8000/*",
+    "http://127.0.0.1:8000/*",
+    "https://api.proscrape.com/*",
+    "https://ss.com/*",
+    "https://city24.lv/*",
+    "https://pp.lv/*"
+  ],
+  
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  
+  "content_scripts": [
+    {
+      "matches": [
+        "https://ss.com/en/real-estate/*",
+        "https://city24.lv/en/*",
+        "https://pp.lv/lv/landing/nekustamais-ipasums/*"
+      ],
+      "js": [
+        "src/content/content-script.js"
+      ],
+      "css": [
+        "src/content/content-styles.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_title": "ProScrape Monitor",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  
+  "options_page": "src/options/options.html",
+  
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' http://localhost:8000 http://127.0.0.1:8000 https://api.proscrape.com ws://localhost:8000 wss://api.proscrape.com;"
+  },
+  
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "src/content/*",
+        "icons/*",
+        "src/config/api.js"
+      ],
+      "matches": [
+        "https://ss.com/*",
+        "https://city24.lv/*",
+        "https://pp.lv/*"
+      ]
+    }
+  ],
+  
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "proscrape_rules",
+        "enabled": true,
+        "path": "src/rules/proscrape-rules.json"
+      }
+    ]
+  },
+  
+  "externally_connectable": {
+    "matches": [
+      "http://localhost:3000/*",
+      "http://localhost:8000/*",
+      "https://api.proscrape.com/*"
+    ]
+  }
+}

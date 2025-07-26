@@ -50,9 +50,10 @@ class Settings(BaseSettings):
     city24_enabled: bool = True
     pp_lv_enabled: bool = True
     
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    model_config = {
+        "env_file": ".env",
+        "env_file_encoding": "utf-8"
+    }
 
 
 # Global settings instance

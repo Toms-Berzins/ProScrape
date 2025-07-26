@@ -39,8 +39,9 @@ ITEM_PIPELINES = {
 
 # Configure downloader middlewares
 DOWNLOADER_MIDDLEWARES = {
-    'spiders.middlewares.UserAgentMiddleware': 400,
-    'spiders.middlewares.ProxyMiddleware': 410,
+    'spiders.middlewares.EnhancedUserAgentMiddleware': 400,
+    'spiders.middlewares.EnhancedProxyMiddleware': 410,
+    'spiders.middlewares.EnhancedRetryMiddleware': 420,
     'scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler': 585,
 }
 

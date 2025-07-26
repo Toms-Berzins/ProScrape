@@ -1,23 +1,5 @@
-version: '3.8'
-
 services:
-  # MongoDB database
-  mongodb:
-    image: mongo:7.0
-    container_name: proscrape_mongodb
-    restart: unless-stopped
-    ports:
-      - "27017:27017"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: password
-      MONGO_INITDB_DATABASE: proscrape
-    volumes:
-      - mongodb_data:/data/db
-    networks:
-      - proscrape_network
-
-  # Redis for Celery
+  # Redis - Message broker for Celery
   redis:
     image: redis:7.2-alpine
     container_name: proscrape_redis
@@ -27,92 +9,239 @@ services:
     volumes:
       - redis_data:/data
     networks:
-      - proscrape_network
+      - proscrape_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    sysctls:
+      net.core.somaxconn: 1024
 
-  # FastAPI application
+  # MongoDB - Primary database (optional if using Atlas)
+  mongodb:
+    image: mongo:7.0
+    container_name: proscrape_mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-password}
+      MONGO_INITDB_DATABASE: ${MONGODB_DATABASE:-proscrape}
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    networks:
+      - proscrape_net
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    profiles:
+      - full
+      - local-db
+
+  # FastAPI Application
   api:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker/Dockerfile.api
+      target: ${BUILD_TARGET:-development}
     container_name: proscrape_api
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "${API_PORT:-8000}:8000"
     environment:
-      - MONGODB_URL=mongodb://admin:password@mongodb:27017/proscrape?authSource=admin
+      - MONGODB_URL=${MONGODB_URL}
+      - MONGODB_DATABASE=${MONGODB_DATABASE:-proscrape}
       - REDIS_URL=redis://redis:6379/0
       - API_HOST=0.0.0.0
       - API_PORT=8000
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173,http://localhost:5174}
     depends_on:
-      - mongodb
-      - redis
+      redis:
+        condition: service_healthy
     volumes:
-      - .:/app
+      # Hot-reload for development
+      - ./api:/app/api:ro
+      - ./models:/app/models:ro
+      - ./utils:/app/utils:ro
+      - ./config:/app/config:ro
     networks:
-      - proscrape_network
+      - proscrape_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
-  # Celery worker
+  # Celery Worker - Background task processing
   celery_worker:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker/Dockerfile.worker
     container_name: proscrape_celery_worker
     restart: unless-stopped
-    command: celery -A tasks.celery_app worker --loglevel=info --concurrency=2
     environment:
-      - MONGODB_URL=mongodb://admin:password@mongodb:27017/proscrape?authSource=admin
+      - MONGODB_URL=${MONGODB_URL}
+      - MONGODB_DATABASE=${MONGODB_DATABASE:-proscrape}
       - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - CELERY_CONCURRENCY=${CELERY_CONCURRENCY:-2}
+    command: >
+      celery -A tasks.celery_app worker 
+      --loglevel=info 
+      --concurrency=${CELERY_CONCURRENCY:-2}
+      --max-tasks-per-child=100
+      --time-limit=3600
+      --soft-time-limit=3000
     depends_on:
-      - mongodb
-      - redis
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
     volumes:
-      - .:/app
+      # Mount source code for development
+      - ./spiders:/app/spiders:ro
+      - ./tasks:/app/tasks:ro
+      - ./utils:/app/utils:ro
+      - ./models:/app/models:ro
+      - ./config:/app/config:ro
     networks:
-      - proscrape_network
+      - proscrape_net
+    deploy:
+      replicas: ${WORKER_REPLICAS:-1}
+    healthcheck:
+      test: ["CMD", "celery", "-A", "tasks.celery_app", "inspect", "ping"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 20s
 
-  # Celery beat (scheduler)
+  # Celery Beat - Task scheduler
   celery_beat:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker/Dockerfile.worker
     container_name: proscrape_celery_beat
     restart: unless-stopped
-    command: celery -A tasks.celery_app beat --loglevel=info
     environment:
-      - MONGODB_URL=mongodb://admin:password@mongodb:27017/proscrape?authSource=admin
+      - MONGODB_URL=${MONGODB_URL}
+      - MONGODB_DATABASE=${MONGODB_DATABASE:-proscrape}
       - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    command: >
+      celery -A tasks.celery_app beat 
+      --loglevel=info
+      --scheduler=django_celery_beat.schedulers:DatabaseScheduler
     depends_on:
-      - mongodb
-      - redis
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
     volumes:
-      - .:/app
+      - ./tasks:/app/tasks:ro
+      - ./config:/app/config:ro
+      - ./models:/app/models:ro
+      - ./utils:/app/utils:ro
+      - celery_beat_data:/app/celerybeat
     networks:
-      - proscrape_network
+      - proscrape_net
+    profiles:
+      - full
+      - scheduler
 
-  # Celery flower (monitoring)
-  celery_flower:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  # Flower - Celery monitoring UI
+  flower:
+    image: mher/flower:2.0
     container_name: proscrape_flower
     restart: unless-stopped
-    command: celery -A tasks.celery_app flower --port=5555
     ports:
-      - "5555:5555"
+      - "${FLOWER_PORT:-5555}:5555"
     environment:
-      - MONGODB_URL=mongodb://admin:password@mongodb:27017/proscrape?authSource=admin
-      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - FLOWER_BASIC_AUTH=${FLOWER_USER:-admin}:${FLOWER_PASSWORD:-password}
+      - FLOWER_PORT=5555
     depends_on:
-      - redis
-    volumes:
-      - .:/app
+      redis:
+        condition: service_healthy
     networks:
-      - proscrape_network
+      - proscrape_net
+    profiles:
+      - full
+      - monitoring
 
+  # PostgreSQL - Alternative/additional database
+  postgres:
+    image: postgres:15-alpine
+    container_name: proscrape_postgres
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-proscrape}
+      POSTGRES_USER: ${POSTGRES_USER:-proscrape}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/scripts/init-postgres.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - proscrape_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-proscrape}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    profiles:
+      - full
+      - postgres
+
+  # Nginx - Reverse proxy (optional)
+  nginx:
+    image: nginx:alpine
+    container_name: proscrape_nginx
+    restart: unless-stopped
+    ports:
+      - "${NGINX_PORT:-80}:80"
+      - "${NGINX_SSL_PORT:-443}:443"
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/conf.d:/etc/nginx/conf.d:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - api
+    networks:
+      - proscrape_net
+    profiles:
+      - full
+      - production
+
+# Named volumes for data persistence
 volumes:
-  mongodb_data:
   redis_data:
+    driver: local
+  mongodb_data:
+    driver: local
+  mongodb_config:
+    driver: local
+  postgres_data:
+    driver: local
+  celery_beat_data:
+    driver: local
+  nginx_logs:
+    driver: local
 
+# Networks
 networks:
-  proscrape_network:
+  proscrape_net:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

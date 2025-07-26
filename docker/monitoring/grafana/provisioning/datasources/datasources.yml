@@ -1,0 +1,46 @@
+# Grafana datasource configuration
+apiVersion: 1
+
+datasources:
+  # Prometheus datasource
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      timeInterval: "15s"
+      queryTimeout: "60s"
+      httpMethod: "POST"
+
+  # Loki datasource for logs
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: true
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        - datasourceUid: prometheus
+          matcherRegex: "traceID=(\\w+)"
+          name: TraceID
+          url: "$${__value.raw}"
+
+  # Redis datasource (if redis-datasource plugin is installed)
+  - name: Redis
+    type: redis-datasource
+    access: proxy
+    url: redis://redis:6379
+    editable: true
+    jsonData:
+      client: "standalone"
+
+  # MongoDB datasource (if mongodb-datasource plugin is installed)
+  - name: MongoDB
+    type: mongodb-datasource
+    access: proxy
+    url: mongodb://mongodb:27017
+    database: proscrape
+    editable: true

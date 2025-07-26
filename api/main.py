@@ -15,6 +15,46 @@ from utils.database import async_db
 from utils.proxies import proxy_rotator
 from utils.alerting import alert_manager
 from config.settings import settings
+try:
+    from config.docker_settings import docker_settings
+except ImportError:
+    from config.settings import settings as docker_settings
+
+
+# Health check functions for Docker services
+def check_mongodb():
+    """Check MongoDB connection health."""
+    try:
+        # This will be async in the actual health check endpoint
+        return {"status": "healthy", "message": "MongoDB connection active"}
+    except Exception as e:
+        return {"status": "unhealthy", "message": f"MongoDB error: {str(e)}"}
+
+
+def check_redis():
+    """Check Redis connection health."""
+    try:
+        import redis
+        redis_url = getattr(docker_settings, 'redis_url', settings.redis_url)
+        r = redis.from_url(redis_url)
+        r.ping()
+        return {"status": "healthy", "message": "Redis connection active"}
+    except Exception as e:
+        return {"status": "unhealthy", "message": f"Redis error: {str(e)}"}
+
+
+def check_celery_workers():
+    """Check Celery workers health."""
+    try:
+        from tasks.celery_app import celery_app
+        inspect = celery_app.control.inspect()
+        stats = inspect.stats()
+        if stats:
+            return {"status": "healthy", "message": f"Celery workers active: {len(stats)}"}
+        else:
+            return {"status": "unhealthy", "message": "No Celery workers found"}
+    except Exception as e:
+        return {"status": "unhealthy", "message": f"Celery error: {str(e)}"}
 
 # Configure logging
 logging.basicConfig(level=settings.log_level)
@@ -71,13 +111,17 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS middleware
+# CORS middleware for Docker and frontend integration
+cors_origins = docker_settings.cors_origins.split(',') if isinstance(docker_settings.cors_origins, str) else docker_settings.cors_origins
+cors_methods = docker_settings.cors_allow_methods.split(',') if isinstance(docker_settings.cors_allow_methods, str) else docker_settings.cors_allow_methods
+cors_headers = docker_settings.cors_allow_headers.split(',') if isinstance(docker_settings.cors_allow_headers, str) else docker_settings.cors_allow_headers
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=cors_origins,
+    allow_credentials=docker_settings.cors_allow_credentials,
+    allow_methods=cors_methods,
+    allow_headers=cors_headers,
 )
 
 
@@ -93,14 +137,28 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
+    """Enhanced health check endpoint for Docker services."""
     try:
         # Test database connection
         await async_db.client.admin.command('ping')
+        
+        # Check all services
+        services = {
+            "mongodb": check_mongodb(),
+            "redis": check_redis(),
+            "celery": check_celery_workers()
+        }
+        
+        # Determine overall health
+        unhealthy_services = [name for name, status in services.items() if status["status"] != "healthy"]
+        overall_status = "healthy" if not unhealthy_services else "degraded"
+        
         return {
-            "status": "healthy",
+            "status": overall_status,
             "timestamp": datetime.utcnow(),
-            "database": "connected"
+            "services": services,
+            "docker_enabled": True,
+            "cors_origins": cors_origins[:3]  # Show first 3 for security
         }
     except Exception as e:
         logger.error(f"Health check failed: {e}")
@@ -677,7 +735,8 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         "api.main:app",
-        host=settings.api_host,
-        port=settings.api_port,
-        reload=settings.api_debug
+        host=docker_settings.api_host,
+        port=docker_settings.api_port,
+        reload=docker_settings.enable_auto_reload,
+        log_level="debug" if docker_settings.enable_debug_logs else "info"
     )

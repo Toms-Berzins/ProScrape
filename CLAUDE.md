@@ -278,3 +278,7 @@ Key variables in `.env`:
 - `LOG_LEVEL` - Logging verbosity
 - `DOWNLOAD_DELAY` - Delay between requests
 - `*_ENABLED` - Enable/disable specific spiders
+
+## Agent and Task Management Guidelines
+
+- Always use agents for specific tasks

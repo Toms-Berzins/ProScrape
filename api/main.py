@@ -10,15 +10,15 @@ import json
 import csv
 import io
 
-from models.listing import ListingResponse, Listing
+from models.listing import ListingResponse, Listing, PaginatedListingResponse
 from utils.database import async_db
 from utils.proxies import proxy_rotator
 from utils.alerting import alert_manager
 from config.settings import settings
 try:
     from config.docker_settings import docker_settings
-except ImportError:
-    from config.settings import settings as docker_settings
+except (ImportError, Exception):
+    docker_settings = settings
 
 
 # Health check functions for Docker services
@@ -112,14 +112,22 @@ app = FastAPI(
 )
 
 # CORS middleware for Docker and frontend integration
-cors_origins = docker_settings.cors_origins.split(',') if isinstance(docker_settings.cors_origins, str) else docker_settings.cors_origins
-cors_methods = docker_settings.cors_allow_methods.split(',') if isinstance(docker_settings.cors_allow_methods, str) else docker_settings.cors_allow_methods
-cors_headers = docker_settings.cors_allow_headers.split(',') if isinstance(docker_settings.cors_allow_headers, str) else docker_settings.cors_allow_headers
+cors_origins = ["*"]  # Allow all origins for development
+cors_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+cors_headers = ["*"]
+
+# Use docker settings if available, otherwise use defaults
+if hasattr(docker_settings, 'cors_origins'):
+    cors_origins = docker_settings.cors_origins.split(',') if isinstance(docker_settings.cors_origins, str) else docker_settings.cors_origins
+if hasattr(docker_settings, 'cors_allow_methods'):
+    cors_methods = docker_settings.cors_allow_methods.split(',') if isinstance(docker_settings.cors_allow_methods, str) else docker_settings.cors_allow_methods
+if hasattr(docker_settings, 'cors_allow_headers'):
+    cors_headers = docker_settings.cors_allow_headers.split(',') if isinstance(docker_settings.cors_allow_headers, str) else docker_settings.cors_allow_headers
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_credentials=docker_settings.cors_allow_credentials,
+    allow_credentials=getattr(docker_settings, 'cors_allow_credentials', True),
     allow_methods=cors_methods,
     allow_headers=cors_headers,
 )
@@ -165,12 +173,13 @@ async def health_check():
         raise HTTPException(status_code=503, detail="Service unavailable")
 
 
-@app.get("/listings", response_model=List[ListingResponse])
+@app.get("/listings", response_model=PaginatedListingResponse)
 async def get_listings(
-    limit: int = Query(50, ge=1, le=1000, description="Number of listings to return"),
-    offset: int = Query(0, ge=0, description="Number of listings to skip"),
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    limit: int = Query(20, ge=1, le=1000, description="Number of listings per page"),
     city: Optional[str] = Query(None, description="Filter by city"),
     property_type: Optional[str] = Query(None, description="Filter by property type"),
+    listing_type: Optional[str] = Query(None, description="Filter by listing type (sell, rent)"),
     min_price: Optional[float] = Query(None, ge=0, description="Minimum price"),
     max_price: Optional[float] = Query(None, ge=0, description="Maximum price"),
     min_area: Optional[float] = Query(None, ge=0, description="Minimum area in sqm"),
@@ -180,6 +189,12 @@ async def get_listings(
     date_to: Optional[datetime] = Query(None, description="Filter listings scraped before this date (ISO format)"),
     posted_from: Optional[datetime] = Query(None, description="Filter listings posted after this date (ISO format)"),
     posted_to: Optional[datetime] = Query(None, description="Filter listings posted before this date (ISO format)"),
+    # Map bounds parameters
+    north: Optional[float] = Query(None, description="Northern boundary latitude"),
+    south: Optional[float] = Query(None, description="Southern boundary latitude"),
+    east: Optional[float] = Query(None, description="Eastern boundary longitude"),
+    west: Optional[float] = Query(None, description="Western boundary longitude"),
+    has_coordinates: Optional[bool] = Query(None, description="Filter listings with valid coordinates"),
     sort_by: str = Query("scraped_at", description="Field to sort by"),
     sort_order: str = Query("desc", regex="^(asc|desc)$", description="Sort order")
 ):
@@ -195,6 +210,9 @@ async def get_listings(
         
         if property_type:
             filter_query["property_type"] = {"$regex": property_type, "$options": "i"}
+        
+        if listing_type:
+            filter_query["listing_type"] = listing_type.lower()
         
         if min_price is not None or max_price is not None:
             price_filter = {}
@@ -233,8 +251,32 @@ async def get_listings(
                 posted_filter["$lte"] = posted_to
             filter_query["posted_date"] = posted_filter
         
+        # Map bounds filtering - coordinates are stored as separate latitude/longitude fields
+        if north is not None and south is not None and east is not None and west is not None:
+            filter_query["latitude"] = {"$gte": south, "$lte": north}
+            filter_query["longitude"] = {"$gte": west, "$lte": east}
+        
+        # Filter listings with coordinates if requested
+        if has_coordinates is not None:
+            if has_coordinates:
+                filter_query["latitude"] = {"$exists": True, "$ne": None}
+                filter_query["longitude"] = {"$exists": True, "$ne": None}
+            else:
+                filter_query["$or"] = [
+                    {"latitude": {"$exists": False}},
+                    {"latitude": None},
+                    {"longitude": {"$exists": False}},
+                    {"longitude": None}
+                ]
+        
         # Build sort order
         sort_direction = 1 if sort_order == "asc" else -1
+        
+        # Calculate offset from page
+        offset = (page - 1) * limit
+        
+        # Get total count for pagination
+        total_count = await collection.count_documents(filter_query)
         
         # Execute query
         cursor = collection.find(filter_query)
@@ -249,7 +291,20 @@ async def get_listings(
             listing_data["id"] = str(listing_data["_id"])
             response_listings.append(ListingResponse(**listing_data))
         
-        return response_listings
+        # Calculate pagination metadata
+        total_pages = (total_count + limit - 1) // limit  # Ceiling division
+        has_next = page < total_pages
+        has_prev = page > 1
+        
+        return PaginatedListingResponse(
+            items=response_listings,
+            total=total_count,
+            page=page,
+            limit=limit,
+            total_pages=total_pages,
+            has_next=has_next,
+            has_prev=has_prev
+        )
         
     except Exception as e:
         logger.error(f"Error fetching listings: {e}")
@@ -341,6 +396,11 @@ async def get_statistics():
             {"$group": {"_id": "$property_type", "count": {"$sum": 1}}}
         ]).to_list(length=None)
         
+        # Count by listing type
+        listing_type_stats = await collection.aggregate([
+            {"$group": {"_id": "$listing_type", "count": {"$sum": 1}}}
+        ]).to_list(length=None)
+        
         # Count by city (top 10)
         city_stats = await collection.aggregate([
             {"$group": {"_id": "$city", "count": {"$sum": 1}}},
@@ -363,6 +423,7 @@ async def get_statistics():
             "total_listings": total_count,
             "by_source": {item["_id"]: item["count"] for item in source_stats},
             "by_property_type": {item["_id"]: item["count"] for item in property_type_stats},
+            "by_listing_type": {item["_id"]: item["count"] for item in listing_type_stats},
             "top_cities": {item["_id"]: item["count"] for item in city_stats},
             "price_stats": price_stats[0] if price_stats else None
         }
@@ -376,6 +437,7 @@ async def get_statistics():
 async def export_listings_csv(
     city: Optional[str] = Query(None, description="Filter by city"),
     property_type: Optional[str] = Query(None, description="Filter by property type"),
+    listing_type: Optional[str] = Query(None, description="Filter by listing type (sell, rent)"),
     min_price: Optional[float] = Query(None, ge=0, description="Minimum price"),
     max_price: Optional[float] = Query(None, ge=0, description="Maximum price"),
     min_area: Optional[float] = Query(None, ge=0, description="Minimum area in sqm"),
@@ -396,6 +458,8 @@ async def export_listings_csv(
             filter_query["city"] = {"$regex": city, "$options": "i"}
         if property_type:
             filter_query["property_type"] = {"$regex": property_type, "$options": "i"}
+        if listing_type:
+            filter_query["listing_type"] = listing_type.lower()
         if min_price is not None or max_price is not None:
             price_filter = {}
             if min_price is not None:
@@ -427,7 +491,7 @@ async def export_listings_csv(
         # Create CSV content
         output = io.StringIO()
         if listings:
-            fieldnames = ['listing_id', 'title', 'price', 'area_sqm', 'property_type', 
+            fieldnames = ['listing_id', 'title', 'price', 'area_sqm', 'property_type', 'listing_type',
                          'city', 'district', 'address', 'source_site', 'url', 'scraped_at', 'posted_date']
             writer = csv.DictWriter(output, fieldnames=fieldnames)
             writer.writeheader()
@@ -458,6 +522,7 @@ async def export_listings_csv(
 async def export_listings_json(
     city: Optional[str] = Query(None, description="Filter by city"),
     property_type: Optional[str] = Query(None, description="Filter by property type"),
+    listing_type: Optional[str] = Query(None, description="Filter by listing type (sell, rent)"),
     min_price: Optional[float] = Query(None, ge=0, description="Minimum price"),
     max_price: Optional[float] = Query(None, ge=0, description="Maximum price"),
     min_area: Optional[float] = Query(None, ge=0, description="Minimum area in sqm"),
@@ -478,6 +543,8 @@ async def export_listings_json(
             filter_query["city"] = {"$regex": city, "$options": "i"}
         if property_type:
             filter_query["property_type"] = {"$regex": property_type, "$options": "i"}
+        if listing_type:
+            filter_query["listing_type"] = listing_type.lower()
         if min_price is not None or max_price is not None:
             price_filter = {}
             if min_price is not None:
@@ -524,6 +591,7 @@ async def export_listings_json(
             "filters_applied": {
                 "city": city,
                 "property_type": property_type,
+                "listing_type": listing_type,
                 "min_price": min_price,
                 "max_price": max_price,
                 "min_area": min_area,

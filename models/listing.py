@@ -34,6 +34,7 @@ class ListingBase(BaseModel):
     
     # Property details
     property_type: Optional[str] = Field(None, description="Type of property (apartment, house, land)")
+    listing_type: Optional[str] = Field(None, description="Listing type (sell, rent)")
     area_sqm: Optional[float] = Field(None, description="Area in square meters")
     rooms: Optional[int] = Field(None, description="Number of rooms")
     floor: Optional[int] = Field(None, description="Floor number")
@@ -88,6 +89,17 @@ class ListingBase(BaseModel):
             raise ValueError(f'Source site must be one of {allowed_sites}')
         return v
     
+    @field_validator('listing_type')
+    @classmethod
+    def validate_listing_type(cls, v):
+        """Validate listing type is either sell or rent."""
+        if v is None:
+            return v
+        allowed_types = {'sell', 'rent'}
+        if v.lower() not in allowed_types:
+            raise ValueError(f'Listing type must be one of {allowed_types}')
+        return v.lower()
+    
     class Config:
         populate_by_name = True
         arbitrary_types_allowed = True
@@ -117,6 +129,7 @@ class ListingUpdate(BaseModel):
     description: Optional[str] = None
     price: Optional[Decimal] = None
     price_currency: Optional[str] = None
+    listing_type: Optional[str] = None
     area_sqm: Optional[float] = None
     rooms: Optional[int] = None
     floor: Optional[int] = None
@@ -141,3 +154,18 @@ class ListingResponse(ListingBase):
     class Config:
         populate_by_name = True
         arbitrary_types_allowed = True
+
+
+class PaginatedListingResponse(BaseModel):
+    """Paginated response for listings API."""
+    
+    items: List[ListingResponse]
+    total: int = Field(..., description="Total number of items matching the query")
+    page: int = Field(..., description="Current page number (1-based)")
+    limit: int = Field(..., description="Number of items per page")
+    total_pages: int = Field(..., description="Total number of pages")
+    has_next: bool = Field(..., description="Whether there are more pages")
+    has_prev: bool = Field(..., description="Whether there are previous pages")
+    
+    class Config:
+        populate_by_name = True

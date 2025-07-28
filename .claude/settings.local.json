@@ -36,7 +36,20 @@
       "Bash(npm run build:*)",
       "Bash(curl:*)",
       "Bash(mv:*)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "Bash(del test_image_urls_pipeline.py)",
+      "Bash(timeout:*)",
+      "WebFetch(domain:ss.com)",
+      "Bash(del:*)",
+      "Bash(call start_redis.bat)",
+      "Bash(move:*)",
+      "Bash(copy spider.log logs\\old\\spider_old.log)",
+      "WebFetch(domain:city24.lv)",
+      "Bash(copy spiderscity24_spider.py spiderscity24_spider_backup.py)",
+      "Bash(copy spiderscity24_spider_simple.py spiderscity24_spider.py)",
+      "Bash(npm ls:*)",
+      "Bash(start test_map_functionality.html)"
     ],
     "deny": []
   }

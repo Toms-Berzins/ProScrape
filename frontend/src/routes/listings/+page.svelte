@@ -1,11 +1,13 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import ListingGrid from '$lib/components/listings/ListingGrid.svelte';
 	import FilterPanel from '$lib/components/search/FilterPanel.svelte';
 	import { ListingsApi } from '$lib/api/listings';
 	import { filters, filterActions, filterSummary } from '$lib/stores/filters';
+	import { realtimeActions, hasNewContent, pendingUpdatesCount } from '$lib/stores/realtime';
+	import { websocketManager } from '$lib/api/websocket';
 	import type { Listing, PaginatedResponse, ListingFilters } from '$lib/types/listing';
 	
 	// State
@@ -16,6 +18,8 @@
 	let currentPage = 1;
 	let hasMore = false;
 	let viewMode: 'grid' | 'list' = 'grid';
+	let realtimeEnabled = true;
+	let showRealtimeUpdates = false;
 	
 	// Load listings with current filters
 	const loadListings = async (page = 1, append = false) => {
@@ -48,6 +52,12 @@
 			
 			const data = response.data as PaginatedResponse<Listing>;
 			
+			// Ensure we have valid data structure
+			if (!data || !data.items || !Array.isArray(data.items)) {
+				error = 'Invalid data structure received from API';
+				return;
+			}
+			
 			if (append) {
 				listings = [...listings, ...data.items];
 			} else {
@@ -56,7 +66,7 @@
 			
 			totalListings = data.total;
 			currentPage = data.page;
-			hasMore = data.hasNext;
+			hasMore = data.has_next;
 			
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load listings';
@@ -112,6 +122,38 @@
 		viewMode = viewMode === 'grid' ? 'list' : 'grid';
 	};
 	
+	// Toggle real-time updates
+	const toggleRealtime = () => {
+		realtimeEnabled = !realtimeEnabled;
+		if (realtimeEnabled) {
+			realtimeActions.startRealtime();
+		} else {
+			realtimeActions.stopRealtime();
+		}
+	};
+	
+	// Apply pending real-time updates
+	const applyRealtimeUpdates = () => {
+		realtimeActions.applyPendingUpdates();
+	};
+	
+	// Start WebSocket connection and real-time updates
+	const startRealtime = () => {
+		// Connect WebSocket
+		websocketManager.connect();
+		
+		// Start real-time monitoring
+		if (realtimeEnabled) {
+			realtimeActions.startRealtime();
+		}
+	};
+	
+	// Stop WebSocket connection
+	const stopRealtime = () => {
+		websocketManager.disconnect();
+		realtimeActions.stopRealtime();
+	};
+	
 	// Update URL with current filters
 	const updateURL = () => {
 		const params = filterActions.getSearchParams();
@@ -128,6 +170,16 @@
 		}
 		
 		loadListings();
+		
+		// Start real-time updates after initial load
+		setTimeout(() => {
+			startRealtime();
+		}, 1000);
+	});
+	
+	// Cleanup on component destroy
+	onDestroy(() => {
+		stopRealtime();
 	});
 </script>
 
@@ -150,6 +202,31 @@
 		
 		<!-- View Controls -->
 		<div class="flex items-center space-x-4">
+			<!-- Map View Button -->
+			<a 
+				href="/map"
+				class="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+			>
+				<svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+				</svg>
+				Map View
+			</a>
+			
+			<!-- Real-time Toggle -->
+			<div class="flex items-center space-x-2">
+				<label class="relative inline-flex items-center cursor-pointer">
+					<input
+						type="checkbox"
+						class="sr-only peer"
+						checked={realtimeEnabled}
+						on:change={toggleRealtime}
+					/>
+					<div class="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+				</label>
+				<span class="text-sm text-gray-600">Live updates</span>
+			</div>
+			
 			<!-- View Mode Toggle -->
 			<div class="flex items-center bg-gray-100 rounded-lg p-1">
 				<button
@@ -196,6 +273,48 @@
 			on:clear={handleClearFilters}
 		/>
 	</div>
+	
+	<!-- Real-time Updates Banner -->
+	{#if $hasNewContent && realtimeEnabled}
+		<div class="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+			<div class="flex items-center justify-between">
+				<div class="flex items-center space-x-3">
+					<div class="flex-shrink-0">
+						<svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+						</svg>
+					</div>
+					<div>
+						<h3 class="text-sm font-medium text-blue-900">
+							New updates available
+						</h3>
+						<p class="text-sm text-blue-700">
+							{$pendingUpdatesCount} new changes found. Click to refresh the listings.
+						</p>
+					</div>
+				</div>
+				<div class="flex items-center space-x-2">
+					<button
+						type="button"
+						class="px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
+						on:click={applyRealtimeUpdates}
+					>
+						Apply Updates
+					</button>
+					<button
+						type="button"
+						class="p-2 text-blue-400 hover:text-blue-600"
+						on:click={() => realtimeActions.clearUpdates()}
+						aria-label="Dismiss updates"
+					>
+						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+						</svg>
+					</button>
+				</div>
+			</div>
+		</div>
+	{/if}
 	
 	<!-- Results -->
 	<ListingGrid 

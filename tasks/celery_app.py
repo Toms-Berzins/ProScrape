@@ -36,23 +36,21 @@ celery_app.conf.update(
     task_default_retry_delay=60,  # 1 minute
     task_max_retries=3,
     
-    # Beat schedule for periodic tasks
+    # Beat schedule for periodic tasks - Production optimized
     beat_schedule={
-        'scrape-ss-com-daily': {
+        'scrape-ss-com-hourly': {
             'task': 'tasks.scraping_tasks.scrape_ss_com',
-            'schedule': 24 * 60 * 60.0,  # Every 24 hours
+            'schedule': 3600.0,  # Every hour for fresh data
         },
-        'scrape-city24-daily': {
-            'task': 'tasks.scraping_tasks.scrape_city24',
-            'schedule': 24 * 60 * 60.0,  # Every 24 hours
+        'scrape-ss-com-full-daily': {
+            'task': 'tasks.scraping_tasks.scrape_ss_com',
+            'schedule': 6 * 3600.0,  # Every 6 hours for comprehensive scraping
+            'options': {'queue': 'scraping'}
         },
-        'scrape-pp-lv-daily': {
-            'task': 'tasks.scraping_tasks.scrape_pp_lv',
-            'schedule': 24 * 60 * 60.0,  # Every 24 hours
-        },
-        'scrape-all-sites-twice-daily': {
-            'task': 'tasks.scraping_tasks.scrape_all_sites',
-            'schedule': 12 * 60 * 60.0,  # Every 12 hours
+        'cleanup-old-listings': {
+            'task': 'tasks.scraping_tasks.cleanup_old_listings',
+            'schedule': 24 * 3600.0,  # Daily cleanup
+            'options': {'queue': 'maintenance'}
         },
     },
 )

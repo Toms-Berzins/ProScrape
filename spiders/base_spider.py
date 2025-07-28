@@ -72,8 +72,15 @@ class BaseRealEstateSpider(scrapy.Spider, ABC):
         """Create a ListingItem with common fields populated."""
         item = ListingItem()
         
+        # Map spider names to domain names
+        spider_to_domain = {
+            'ss_spider': 'ss.com',
+            'city24_spider': 'city24.lv',
+            'pp_spider': 'pp.lv'
+        }
+        
         # Set common fields
-        item['source_site'] = self.name
+        item['source_site'] = spider_to_domain.get(self.name, self.name)
         item['source_url'] = response.url
         item['scraped_at'] = datetime.utcnow()
         
@@ -123,7 +130,26 @@ class BaseRealEstateSpider(scrapy.Spider, ABC):
         
         import re
         
-        # Remove common currency symbols and text
+        # SS.com specific format: "Price 490 €/mon. (21.30 €/m²)"
+        # Look for price followed by number and currency
+        ss_price_match = re.search(r'price\s+(\d+(?:[,\s]\d+)*)\s*[€$£¥]?/?mon', price_text, re.IGNORECASE)
+        if ss_price_match:
+            try:
+                price_str = ss_price_match.group(1).replace(',', '').replace(' ', '')
+                return float(price_str)
+            except ValueError:
+                pass
+        
+        # General format: find number before currency symbol or /mon
+        price_match = re.search(r'(\d+(?:[,\s]\d+)*)\s*[€$£¥]?/?mon', price_text, re.IGNORECASE)
+        if price_match:
+            try:
+                price_str = price_match.group(1).replace(',', '').replace(' ', '')
+                return float(price_str)
+            except ValueError:
+                pass
+        
+        # Fallback: extract any numeric value with currency
         cleaned = re.sub(r'[€$£¥]|EUR|USD|GBP|JPY', '', price_text)
         cleaned = re.sub(r'[,\s]+', '', cleaned)
         

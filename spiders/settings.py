@@ -42,7 +42,9 @@ DOWNLOADER_MIDDLEWARES = {
     'spiders.middlewares.EnhancedUserAgentMiddleware': 400,
     'spiders.middlewares.EnhancedProxyMiddleware': 410,
     'spiders.middlewares.EnhancedRetryMiddleware': 420,
-    'scrapy_playwright.handler.ScrapyPlaywrightDownloadHandler': 585,
+    'spiders.stealth_middleware.StealthPlaywrightMiddleware': 585,
+    'spiders.stealth_middleware.CloudflareBypassMiddleware': 586,
+    'spiders.stealth_middleware.TLSFingerprintMiddleware': 587,
 }
 
 # Download handlers for Playwright
@@ -66,11 +68,16 @@ PLAYWRIGHT_LAUNCH_OPTIONS = {
 }
 
 # Additional Playwright settings
-PLAYWRIGHT_DEFAULT_NAVIGATION_TIMEOUT = 30000
+PLAYWRIGHT_DEFAULT_NAVIGATION_TIMEOUT = 60000
 PLAYWRIGHT_PAGE_GOTO_KWARGS = {
-    'wait_until': 'networkidle',
-    'timeout': 30000,
+    'wait_until': 'load',  # Changed from networkidle for better compatibility
+    'timeout': 60000,
 }
+
+# Stealth configuration
+STEALTH_ENABLED = True
+CLOUDFLARE_BYPASS_ENABLED = True
+TLS_FINGERPRINT_ENABLED = True
 
 # Enable asyncio reactor for Playwright
 TWISTED_REACTOR = 'twisted.internet.asyncioreactor.AsyncioSelectorReactor'

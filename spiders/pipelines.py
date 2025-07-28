@@ -112,12 +112,19 @@ class MongoPipeline:
         self.db = self.client[self.mongo_db]
         self.collection = self.db.listings
         
-        # Create indexes
-        self.collection.create_index([("listing_id", 1), ("source_site", 1)], unique=True)
-        self.collection.create_index("scraped_at")
-        self.collection.create_index("city")
-        self.collection.create_index("property_type")
-        self.collection.create_index("price")
+        # Create indexes with error handling
+        try:
+            self.collection.create_index([("listing_id", 1), ("source_site", 1)], unique=True)
+        except Exception as e:
+            spider.logger.info(f"Index creation skipped (may already exist): {e}")
+            
+        try:
+            self.collection.create_index("scraped_at")
+            self.collection.create_index("city")
+            self.collection.create_index("property_type")
+            self.collection.create_index("price")
+        except Exception as e:
+            spider.logger.debug(f"Some indexes may already exist: {e}")
         
         spider.logger.info(f"Connected to MongoDB: {self.mongo_uri}/{self.mongo_db}")
     
@@ -139,7 +146,12 @@ class MongoPipeline:
                 "source_site": listing.source_site
             }
             
-            update_data = listing.dict()
+            update_data = listing.model_dump()
+            
+            # Convert Decimal to float for MongoDB compatibility
+            for key, value in update_data.items():
+                if hasattr(value, '__class__') and value.__class__.__name__ == 'Decimal':
+                    update_data[key] = float(value)
             
             result = self.collection.update_one(
                 filter_query,

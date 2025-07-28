@@ -130,6 +130,10 @@ class ListingItem(scrapy.Item):
     )
     latitude = scrapy.Field()
     longitude = scrapy.Field()
+    map_link = scrapy.Field(  # For sites that provide map links instead of coordinates
+        input_processor=MapCompose(clean_text),
+        output_processor=TakeFirst()
+    )
     
     # Description and features
     description = scrapy.Field(

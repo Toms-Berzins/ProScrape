@@ -31,5 +31,13 @@
 		"typescript": "^5.0.0",
 		"vite": "^7.0.4",
 		"vitest": "^3.2.4"
+	},
+	"dependencies": {
+		"@types/leaflet": "^1.9.20",
+		"@types/leaflet-draw": "^1.0.12",
+		"@types/leaflet.markercluster": "^1.5.5",
+		"leaflet": "^1.9.4",
+		"leaflet-draw": "^1.0.4",
+		"leaflet.markercluster": "^1.5.3"
 	}
 }

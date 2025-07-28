@@ -2,10 +2,10 @@ import { error } from '@sveltejs/kit';
 import { ListingsApi } from '$lib/api/listings';
 import type { PageLoad } from './$types';
 
-export const load: PageLoad = async ({ params, url }) => {
+export const load: PageLoad = async ({ params, url, fetch }) => {
 	try {
 		// Load the main listing
-		const listingResponse = await ListingsApi.getListing(params.id);
+		const listingResponse = await ListingsApi.getListing(params.id, fetch);
 		
 		if (listingResponse.error || !listingResponse.data) {
 			throw error(404, {
@@ -17,7 +17,7 @@ export const load: PageLoad = async ({ params, url }) => {
 		const listing = listingResponse.data;
 
 		// Load similar listings in parallel
-		const similarListingsPromise = ListingsApi.getSimilarListings(params.id, 4);
+		const similarListingsPromise = ListingsApi.getSimilarListings(params.id, 4, fetch);
 
 		try {
 			const [similarListingsResponse] = await Promise.all([

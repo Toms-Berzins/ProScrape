@@ -8,6 +8,7 @@
 	import PropertyDetails from '$lib/components/listings/PropertyDetails.svelte';
 	import ContactSection from '$lib/components/listings/ContactSection.svelte';
 	import SimilarProperties from '$lib/components/listings/SimilarProperties.svelte';
+	import RecentlyViewed from '$lib/components/engagement/RecentlyViewed.svelte';
 	
 	export let data: PageData;
 	
@@ -172,6 +173,11 @@
 					<PropertyDetails 
 						{listing}
 						showMap={true}
+						trackViewing={true}
+						on:favoriteToggled={handleActionTaken}
+						on:addedToComparison={handleActionTaken}
+						on:propertyShared={handleActionTaken}
+						on:visitedOriginalSite={handleActionTaken}
 					/>
 				</section>
 			</div>
@@ -202,6 +208,18 @@
 				/>
 			</section>
 		{/if}
+		
+		<!-- Recently Viewed Section -->
+		<section class="mt-12">
+			<RecentlyViewed 
+				maxItems={4}
+				title="Recently Viewed Properties"
+				compact={false}
+				showClearButton={false}
+				on:propertyViewed={handlePropertyViewed}
+				on:viewAllHistory={() => goto('/engagement?view=history')}
+			/>
+		</section>
 	</main>
 
 	<!-- Back to Top Button -->
@@ -280,20 +298,12 @@
 		.shadow-sm, .shadow-lg {
 			box-shadow: none !important;
 		}
-		
-		.border {
-			border: 1px solid #e5e7eb !important;
-		}
 	}
 
 	/* High contrast mode support */
 	@media (prefers-contrast: high) {
 		.bg-gray-50 {
 			background-color: white;
-		}
-		
-		.text-gray-600 {
-			color: #374151;
 		}
 		
 		.border-gray-200 {

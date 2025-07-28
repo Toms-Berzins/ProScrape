@@ -1,0 +1,92 @@
+{
+  "api": {
+    "messages": {
+      "welcome": "Добро пожаловать в ProScrape",
+      "success": "Операция успешно завершена",
+      "loading": "Загрузка...",
+      "no_results": "Результаты не найдены",
+      "search_placeholder": "Поиск недвижимости..."
+    },
+    "errors": {
+      "internal_server_error": "Внутренняя ошибка сервера",
+      "not_found": "Ресурс не найден",
+      "validation_error": "Ошибка валидации",
+      "unauthorized": "Неавторизованный доступ",
+      "forbidden": "Доступ запрещен",
+      "bad_request": "Неверный запрос",
+      "method_not_allowed": "Метод не разрешен",
+      "unprocessable_entity": "Необрабатываемая сущность",
+      "database_error": "Ошибка базы данных",
+      "service_unavailable": "Сервис временно недоступен"
+    },
+    "validation": {
+      "required": "Поле '{field}' обязательно",
+      "invalid": "Поле '{field}' недействительно",
+      "must_be_integer": "Поле '{field}' должно быть целым числом",
+      "must_be_number": "Поле '{field}' должно быть числом",
+      "must_be_boolean": "Поле '{field}' должно быть истинным или ложным",
+      "invalid_email": "Поле '{field}' должно содержать действительный email адрес",
+      "invalid_url": "Поле '{field}' должно содержать действительный URL",
+      "min_length": "Поле '{field}' должно содержать не менее {min_length} символов",
+      "max_length": "Поле '{field}' должно содержать не более {max_length} символов",
+      "minimum_value": "Поле '{field}' должно быть не менее {minimum}",
+      "maximum_value": "Поле '{field}' должно быть не более {maximum}"
+    },
+    "pagination": {
+      "page": "Страница",
+      "of": "из",
+      "items": "записей",
+      "showing": "Показано",
+      "to": "до",
+      "previous": "Предыдущая",
+      "next": "Следующая",
+      "first": "Первая",
+      "last": "Последняя"
+    },
+    "filters": {
+      "city": "Город",
+      "property_type": "Тип недвижимости",
+      "listing_type": "Тип объявления",
+      "price_range": "Диапазон цен",
+      "area_range": "Диапазон площади",
+      "min_price": "Минимальная цена",
+      "max_price": "Максимальная цена",
+      "min_area": "Минимальная площадь",
+      "max_area": "Максимальная площадь",
+      "apply_filters": "Применить фильтры",
+      "clear_filters": "Очистить фильтры",
+      "reset": "Сбросить"
+    },
+    "sort": {
+      "sort_by": "Сортировать по",
+      "price_asc": "Цена (по возрастанию)",
+      "price_desc": "Цена (по убыванию)",
+      "area_asc": "Площадь (по возрастанию)",
+      "area_desc": "Площадь (по убыванию)",
+      "date_asc": "Дата (старые сначала)",
+      "date_desc": "Дата (новые сначала)",
+      "relevance": "По релевантности"
+    },
+    "units": {
+      "sqm": "м²",
+      "currency": "EUR",
+      "rooms": "комнат",
+      "floor": "этаж",
+      "total_floors": "этажей всего"
+    },
+    "export": {
+      "csv": "Экспорт в CSV",
+      "json": "Экспорт в JSON",
+      "download": "Скачать",
+      "export_successful": "Экспорт успешно завершен",
+      "export_failed": "Экспорт не удался"
+    },
+    "websocket": {
+      "connected": "Подключен к обновлениям в реальном времени",
+      "disconnected": "Отключен от обновлений в реальном времени",
+      "reconnecting": "Переподключение...",
+      "connection_error": "Ошибка соединения",
+      "new_listing": "Доступно новое объявление о недвижимости"
+    }
+  }
+}

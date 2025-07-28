@@ -15,9 +15,12 @@ ProScrape is a web scraping pipeline for Latvian real estate websites. The proje
 - **Static scraping**: BeautifulSoup/XPath for HTML parsing
 - **Dynamic scraping**: Playwright for JavaScript-rendered pages
 - **Data storage**: MongoDB with Motor (async driver)
-- **API**: FastAPI with Pydantic for data validation
+- **API**: FastAPI with Pydantic for data validation and enhanced WebSocket support
+- **WebSocket**: Enhanced connection manager with health monitoring and automatic reconnection
 - **Task queue**: Celery with RabbitMQ/Redis
 - **Task scheduling**: Celery Beat
+- **Internationalization**: Multi-language support (EN/LV/RU) with dynamic translation
+- **Containerization**: Docker with production-ready multi-stage builds
 
 ## Project Structure (Implemented)
 
@@ -43,13 +46,26 @@ ProScrape/
 │   └── scraping_tasks.py    # Celery task definitions
 ├── api/
 │   ├── __init__.py
-│   └── main.py              # FastAPI application with endpoints
+│   ├── main.py              # FastAPI application with enhanced WebSocket support
+│   ├── i18n_endpoints.py    # Internationalization API endpoints
+│   └── middleware/          # API middleware
+│       ├── cors.py          # CORS configuration
+│       └── i18n.py          # Language detection middleware
+├── websocket/
+│   ├── __init__.py
+│   └── enhanced_manager.py  # Enhanced WebSocket connection manager
 ├── utils/
 │   ├── __init__.py
 │   ├── database.py          # MongoDB connection utilities
 │   ├── proxies.py           # Proxy and UA rotation logic
 │   ├── normalization.py     # Data normalization utilities
+│   ├── translation_manager.py # Translation management system
 │   └── logging_config.py    # Structured logging configuration
+├── translations/
+│   ├── en.json              # English translations
+│   ├── lv.json              # Latvian translations
+│   ├── ru.json              # Russian translations
+│   └── properties_*.json    # Property-specific translations
 ├── config/
 │   ├── __init__.py
 │   └── settings.py          # Environment-based configuration
@@ -74,8 +90,9 @@ ProScrape/
 
 ## Development Commands
 
-The project is fully implemented and tested. Here are the key commands:
+The project is fully implemented with enhanced WebSocket support and internationalization. Here are the key commands:
 
+### Local Development
 ```bash
 # Environment setup
 python -m venv venv
@@ -93,10 +110,14 @@ python test_celery_worker.py    # Celery worker connectivity
 python test_celery_beat.py      # Celery Beat scheduler
 
 # Run services (use separate terminals)
-python run.py api       # FastAPI server on port 8000
+python run.py api       # FastAPI server with enhanced WebSocket on port 8000
 python run.py worker    # Celery worker
 python run.py beat      # Celery scheduler
 python run.py flower    # Monitoring UI on port 5555
+
+# Test enhanced WebSocket implementation
+python test_websocket_stability.py     # Comprehensive WebSocket stability tests
+python test_frontend_ws.py             # Frontend WebSocket client compatibility
 
 # Run spiders directly
 python -m scrapy crawl ss_spider
@@ -105,22 +126,70 @@ python -m scrapy crawl pp_spider
 
 # Run tests
 pytest tests/
+```
 
-# Docker deployment (production)
-docker-compose -f docker-compose.redis.yml up -d
+### Docker Deployment (Recommended)
+```bash
+# Start all services with enhanced WebSocket support
+docker-compose --env-file .env.docker up -d
+
+# Start individual services
+docker-compose --env-file .env.docker up -d redis  # Redis server
+docker-compose --env-file .env.docker up -d api    # API with enhanced WebSocket
+docker-compose --env-file .env.docker up -d flower # Monitoring UI
+
+# Rebuild containers after code changes
+docker-compose --env-file .env.docker up -d --build
+
+# View container logs
+docker-compose logs -f api    # API and WebSocket logs
+docker-compose logs -f redis  # Redis logs
+
+# Check container health
+docker ps                     # Running containers
+docker-compose ps             # Service status
+
+# Stop all services
+docker-compose down
+
+# Production deployment with optimized WebSocket configuration
+docker-compose -f docker-compose.websocket.yml --env-file .env.docker --profile production up -d
 ```
 
 ## Current Status
 
+### Core Infrastructure ✅
 - ✅ **MongoDB**: Connected to Atlas cluster (connection string in .env)
+- ✅ **Redis**: Configured with Docker for Celery and WebSocket background tasks
+- ✅ **Docker**: Production-ready containerization with multi-stage builds
+
+### Data Pipeline ✅
 - ✅ **Spiders**: All three spiders implemented and tested with proper selectors
-- ✅ **API**: FastAPI running with full CRUD endpoints
-- ✅ **Models**: Pydantic v2 compatible with Decimal handling
-- ✅ **Tests**: Unit tests for models and normalization
-- ✅ **Redis**: Installed and configured with Docker for Celery
+- ✅ **Models**: Pydantic v2 compatible with Decimal handling and i18n support
+- ✅ **Data Normalization**: Integrated into Scrapy pipelines with multi-language support
 - ✅ **Celery**: Worker and Beat scheduler tested and working
-- ✅ **Data Normalization**: Integrated into Scrapy pipelines
+
+### API & WebSocket ✅
+- ✅ **API**: FastAPI running with full CRUD endpoints and health monitoring
+- ✅ **Enhanced WebSocket**: Stable connection manager with automatic health monitoring
+- ✅ **Real-time Updates**: WebSocket broadcasting with ping/pong mechanism
+- ✅ **Connection Management**: Unique connection IDs, state tracking, background cleanup
+
+### Internationalization ✅
+- ✅ **Multi-language Support**: EN/LV/RU translations with dynamic switching
+- ✅ **Translation Management**: Centralized translation system with caching
+- ✅ **API i18n**: Language detection middleware and localized responses
+- ✅ **Property Translations**: Specialized translations for real estate terminology
+
+### Testing & Monitoring ✅
+- ✅ **Unit Tests**: Comprehensive test suite for models and normalization
+- ✅ **WebSocket Tests**: Stability and frontend compatibility testing
+- ✅ **Health Monitoring**: API health checks and WebSocket statistics
+- ✅ **Container Monitoring**: Docker health checks and service dependencies
+
+### Remaining Tasks
 - ⚠️ **Proxies**: Proxy rotation implemented but no proxies configured
+- 🔄 **Production Deployment**: Ready for production with Nginx proxy support
 
 ## Key Implementation Guidelines
 

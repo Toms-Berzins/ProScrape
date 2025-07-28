@@ -1,0 +1,164 @@
+# Docker Compose configuration optimized for enhanced WebSocket deployment
+version: '3.8'
+
+services:
+  # Redis - Required for enhanced WebSocket manager background tasks
+  redis:
+    image: redis:7.2-alpine
+    container_name: proscrape_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - proscrape_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    sysctls:
+      net.core.somaxconn: 1024
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+  # Enhanced FastAPI Application with WebSocket support
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+      target: ${BUILD_TARGET:-production}
+    container_name: proscrape_api_enhanced
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      # Database connections
+      - MONGODB_URL=${MONGODB_URL}
+      - MONGODB_DATABASE=${MONGODB_DATABASE:-proscrape}
+      
+      # Redis for enhanced WebSocket manager
+      - REDIS_URL=redis://redis:6379/0
+      
+      # API configuration
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      
+      # CORS for WebSocket clients
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173,http://localhost:5174,ws://localhost:8000}
+      
+      # Enhanced WebSocket settings
+      - WEBSOCKET_PING_INTERVAL=30
+      - WEBSOCKET_PING_TIMEOUT=10
+      - WEBSOCKET_MAX_PING_FAILURES=3
+      
+      # Translation support
+      - DEFAULT_LANGUAGE=en
+      - SUPPORTED_LANGUAGES=en,lv,ru
+      
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      # Mount websocket and api directories for hot-reload in development
+      - ./api:/app/api${VOLUME_MODE:-:ro}
+      - ./websocket:/app/websocket${VOLUME_MODE:-:ro}
+      - ./models:/app/models${VOLUME_MODE:-:ro}
+      - ./utils:/app/utils${VOLUME_MODE:-:ro}
+      - ./config:/app/config${VOLUME_MODE:-:ro}
+      - ./translations:/app/translations${VOLUME_MODE:-:ro}
+    networks:
+      - proscrape_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # WebSocket Connection Monitoring
+  websocket_monitor:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+      target: ${BUILD_TARGET:-production}
+    container_name: proscrape_websocket_monitor
+    restart: unless-stopped
+    environment:
+      - MONGODB_URL=${MONGODB_URL}
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=INFO
+      - MONITORING_INTERVAL=60
+    command: >
+      python -c "
+      import asyncio;
+      import aiohttp;
+      import logging;
+      from datetime import datetime;
+      logging.basicConfig(level=logging.INFO);
+      logger = logging.getLogger('websocket_monitor');
+      async def monitor_websocket():
+          while True:
+              try:
+                  async with aiohttp.ClientSession() as session:
+                      async with session.get('http://api:8000/monitoring/websocket/stats') as response:
+                          if response.status == 200:
+                              data = await response.json();
+                              logger.info(f'WebSocket Stats: {data.get(\"active_connections\", 0)} active, {data.get(\"total_connections\", 0)} total')
+                          else:
+                              logger.warning(f'Failed to get WebSocket stats: HTTP {response.status}')
+              except Exception as e:
+                  logger.error(f'Monitor error: {e}')
+              await asyncio.sleep(60);
+      asyncio.run(monitor_websocket())
+      "
+    depends_on:
+      api:
+        condition: service_healthy
+    profiles:
+      - monitoring
+      - full
+    networks:
+      - proscrape_net
+
+  # Nginx for WebSocket proxy (production)
+  nginx:
+    image: nginx:alpine
+    container_name: proscrape_nginx
+    restart: unless-stopped
+    ports:
+      - "${NGINX_PORT:-80}:80"
+      - "${NGINX_SSL_PORT:-443}:443"
+    volumes:
+      - ./docker/nginx/websocket.conf:/etc/nginx/conf.d/default.conf:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - api
+    networks:
+      - proscrape_net
+    profiles:
+      - production
+      - full
+
+# Named volumes
+volumes:
+  redis_data:
+    driver: local
+  nginx_logs:
+    driver: local
+
+# Networks
+networks:
+  proscrape_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

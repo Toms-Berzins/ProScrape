@@ -1,0 +1,92 @@
+{
+  "api": {
+    "messages": {
+      "welcome": "Laipni lūdzam ProScrape",
+      "success": "Operācija veiksmīgi pabeigta",
+      "loading": "Ielādē...",
+      "no_results": "Nav atrasts neviens rezultāts",
+      "search_placeholder": "Meklēt īpašumus..."
+    },
+    "errors": {
+      "internal_server_error": "Servera iekšējā kļūda",
+      "not_found": "Resurss nav atrasts",
+      "validation_error": "Validācijas kļūda",
+      "unauthorized": "Neatļauta piekļuve",
+      "forbidden": "Piekļuve aizliegta",
+      "bad_request": "Nepareizs pieprasījums",
+      "method_not_allowed": "Metode nav atļauta",
+      "unprocessable_entity": "Neapstrādājama entītija",
+      "database_error": "Datubāzes kļūda",
+      "service_unavailable": "Pakalpojums īslaicīgi nav pieejams"
+    },
+    "validation": {
+      "required": "Lauks '{field}' ir obligāts",
+      "invalid": "Lauks '{field}' ir nederīgs",
+      "must_be_integer": "Laukam '{field}' jābūt veselam skaitlim",
+      "must_be_number": "Laukam '{field}' jābūt skaitlim",
+      "must_be_boolean": "Laukam '{field}' jābūt patiesam vai nepatiesam",
+      "invalid_email": "Laukam '{field}' jābūt derīgai e-pasta adresei",
+      "invalid_url": "Laukam '{field}' jābūt derīgai URL adresei",
+      "min_length": "Laukam '{field}' jābūt vismaz {min_length} rakstzīmju garam",
+      "max_length": "Laukam '{field}' nedrīkst būt vairāk par {max_length} rakstzīmēm",
+      "minimum_value": "Laukam '{field}' jābūt vismaz {minimum}",
+      "maximum_value": "Laukam '{field}' nedrīkst būt vairāk par {maximum}"
+    },
+    "pagination": {
+      "page": "Lapa",
+      "of": "no",
+      "items": "ieraksti",
+      "showing": "Rāda",
+      "to": "līdz",
+      "previous": "Iepriekšējā",
+      "next": "Nākamā",
+      "first": "Pirmā",
+      "last": "Pēdējā"
+    },
+    "filters": {
+      "city": "Pilsēta",
+      "property_type": "Īpašuma veids",
+      "listing_type": "Sludinājuma veids",
+      "price_range": "Cenu diapazons",
+      "area_range": "Platības diapazons",
+      "min_price": "Minimālā cena",
+      "max_price": "Maksimālā cena",
+      "min_area": "Minimālā platība",
+      "max_area": "Maksimālā platība",
+      "apply_filters": "Piemērot filtrus",
+      "clear_filters": "Notīrīt filtrus",
+      "reset": "Atiestatīt"
+    },
+    "sort": {
+      "sort_by": "Kārtot pēc",
+      "price_asc": "Cena (no zemākās uz augstāko)",
+      "price_desc": "Cena (no augstākās uz zemāko)",
+      "area_asc": "Platība (no mazākās uz lielāko)",
+      "area_desc": "Platība (no lielākās uz mazāko)",
+      "date_asc": "Datums (no vecākā uz jaunāko)",
+      "date_desc": "Datums (no jaunākā uz vecāko)",
+      "relevance": "Atbilstība"
+    },
+    "units": {
+      "sqm": "m²",
+      "currency": "EUR",
+      "rooms": "istabas",
+      "floor": "stāvs",
+      "total_floors": "stāvi kopā"
+    },
+    "export": {
+      "csv": "Eksportēt uz CSV",
+      "json": "Eksportēt uz JSON",
+      "download": "Lejupielādēt",
+      "export_successful": "Eksports veiksmīgi pabeigts",
+      "export_failed": "Eksports neizdevās"
+    },
+    "websocket": {
+      "connected": "Pieslēgts reāllaika atjauninājumiem",
+      "disconnected": "Atvienots no reāllaika atjauninājumiem",
+      "reconnecting": "Atkārtoti pieslēdzas...",
+      "connection_error": "Savienojuma kļūda",
+      "new_listing": "Pieejams jauns īpašuma sludinājums"
+    }
+  }
+}

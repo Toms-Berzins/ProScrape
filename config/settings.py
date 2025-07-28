@@ -50,6 +50,27 @@ class Settings(BaseSettings):
     city24_enabled: bool = True
     pp_lv_enabled: bool = True
     
+    # I18n settings
+    i18n_enabled: bool = True
+    default_language: str = "lv"
+    supported_languages: List[str] = ["en", "lv", "ru"]
+    auto_translate: bool = False
+    auto_detect_duplicates: bool = True
+    
+    # Translation service settings
+    google_translate_api_key: Optional[str] = None
+    deepl_api_key: Optional[str] = None
+    azure_translator_key: Optional[str] = None
+    azure_translator_region: Optional[str] = None
+    translation_cache_ttl_hours: int = 168  # 1 week
+    translation_requests_per_minute: int = 60
+    translation_requests_per_hour: int = 3600
+    
+    # Quality and monitoring settings
+    min_translation_confidence: float = 0.7
+    duplicate_detection_threshold: float = 0.8
+    quality_monitoring_enabled: bool = True
+    
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8"

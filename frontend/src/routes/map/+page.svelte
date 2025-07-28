@@ -25,7 +25,7 @@
 	// Components
 	import MapContainer from '$lib/components/map/MapContainer.svelte';
 	import PropertySidebar from '$lib/components/map/PropertySidebar.svelte';
-	import MapControls from '$lib/components/map/MapControls.svelte';
+	import AdvancedMapControls from '$lib/components/map/AdvancedMapControls.svelte';
 	import FilterPanel from '$lib/components/search/FilterPanel.svelte';
 	import SearchBar from '$lib/components/search/SearchBar.svelte';
 	import ToastContainer from '$lib/components/notifications/ToastContainer.svelte';
@@ -396,10 +396,13 @@
 				on:marker-clicked={handleMarkerClicked}
 			/>
 
-			<!-- Map controls overlay -->
-			<MapControls 
+			<!-- Advanced map controls overlay -->
+			<AdvancedMapControls 
 				map={mapComponent?.getMap()}
+				compact={true}
 				on:area-drawn={handleAreaDrawn}
+				on:location-requested={() => console.log('Location requested')}
+				on:layer-changed={(e) => console.log('Layer changed:', e.detail)}
 			/>
 
 			<!-- Loading overlay -->

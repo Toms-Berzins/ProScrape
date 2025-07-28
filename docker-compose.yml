@@ -69,9 +69,11 @@ services:
     volumes:
       # Hot-reload for development
       - ./api:/app/api:ro
+      - ./websocket:/app/websocket:ro
       - ./models:/app/models:ro
       - ./utils:/app/utils:ro
       - ./config:/app/config:ro
+      - ./translations:/app/translations:ro
     networks:
       - proscrape_net
     healthcheck:

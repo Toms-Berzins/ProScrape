@@ -49,7 +49,14 @@
       "Bash(copy spiderscity24_spider.py spiderscity24_spider_backup.py)",
       "Bash(copy spiderscity24_spider_simple.py spiderscity24_spider.py)",
       "Bash(npm ls:*)",
-      "Bash(start test_map_functionality.html)"
+      "Bash(start test_map_functionality.html)",
+      "Bash(grep:*)",
+      "Bash(npm run check:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(npm run type-check:*)",
+      "Bash(pkill:*)",
+      "Bash(taskkill:*)",
+      "Bash(start /B python:*)"
     ],
     "deny": []
   }

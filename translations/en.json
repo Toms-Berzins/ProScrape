@@ -1,0 +1,164 @@
+{
+  "api": {
+    "messages": {
+      "welcome": "Welcome to ProScrape API",
+      "success": "Operation completed successfully",
+      "loading": "Loading...",
+      "no_results": "No results found",
+      "search_placeholder": "Search properties...",
+      "language_switched": "Language switched to {language}",
+      "no_title": "No title",
+      "no_description": "No description available",
+      "price_on_request": "Price on request",
+      "area_not_specified": "Area not specified",
+      "location_not_specified": "Location not specified",
+      "property_type_not_specified": "Property type not specified",
+      "listing_type_not_specified": "Listing type not specified",
+      "date_not_available": "Date not available"
+    },
+    "errors": {
+      "internal_server_error": "Internal server error",
+      "not_found": "Resource not found",
+      "validation_error": "Validation error",
+      "unauthorized": "Unauthorized access",
+      "forbidden": "Access forbidden",
+      "bad_request": "Bad request",
+      "method_not_allowed": "Method not allowed",
+      "unprocessable_entity": "Unprocessable entity",
+      "database_error": "Database error",
+      "service_unavailable": "Service temporarily unavailable"
+    },
+    "validation": {
+      "required": "Field '{field}' is required",
+      "invalid": "Field '{field}' is invalid",
+      "must_be_integer": "Field '{field}' must be an integer",
+      "must_be_number": "Field '{field}' must be a number",
+      "must_be_boolean": "Field '{field}' must be true or false",
+      "invalid_email": "Field '{field}' must be a valid email address",
+      "invalid_url": "Field '{field}' must be a valid URL",
+      "min_length": "Field '{field}' must be at least {min_length} characters long",
+      "max_length": "Field '{field}' must be no more than {max_length} characters long",
+      "minimum_value": "Field '{field}' must be at least {minimum}",
+      "maximum_value": "Field '{field}' must be no more than {maximum}"
+    },
+    "pagination": {
+      "page": "Page",
+      "of": "of",
+      "items": "items",
+      "showing": "Showing",
+      "to": "to",
+      "previous": "Previous",
+      "next": "Next",
+      "first": "First",
+      "last": "Last"
+    },
+    "filters": {
+      "city": "City",
+      "property_type": "Property Type",
+      "listing_type": "Listing Type",
+      "price_range": "Price Range",
+      "area_range": "Area Range",
+      "min_price": "Minimum Price",
+      "max_price": "Maximum Price",
+      "min_area": "Minimum Area",
+      "max_area": "Maximum Area",
+      "apply_filters": "Apply Filters",
+      "clear_filters": "Clear Filters",
+      "reset": "Reset"
+    },
+    "sort": {
+      "sort_by": "Sort by",
+      "price_asc": "Price (Low to High)",
+      "price_desc": "Price (High to Low)",
+      "area_asc": "Area (Small to Large)",
+      "area_desc": "Area (Large to Small)",
+      "date_asc": "Date (Oldest First)",
+      "date_desc": "Date (Newest First)",
+      "relevance": "Relevance"
+    },
+    "units": {
+      "sqm": "m²",
+      "currency": "EUR",
+      "rooms": "rooms",
+      "floor": "floor",
+      "total_floors": "floors total"
+    },
+    "export": {
+      "csv": "Export to CSV",
+      "json": "Export to JSON",
+      "download": "Download",
+      "export_successful": "Export completed successfully",
+      "export_failed": "Export failed"
+    },
+    "websocket": {
+      "connected": "Connected to real-time updates",
+      "disconnected": "Disconnected from real-time updates",
+      "reconnecting": "Reconnecting...",
+      "connection_error": "Connection error",
+      "new_listing": "New property listing available",
+      "subscribed": "Subscribed to real-time listing updates",
+      "language_switched": "Language switched successfully",
+      "unsupported_language": "Unsupported language",
+      "unknown_message_type": "Unknown message type",
+      "echo": "Received"
+    },
+    "health": {
+      "status_message": "System health check completed"
+    },
+    "fields": {
+      "listing_id": "Listing ID",
+      "title": "Title",
+      "price": "Price",
+      "price_formatted": "Price (formatted)",
+      "area_sqm": "Area (m²)",
+      "area_formatted": "Area (formatted)",
+      "property_type": "Property Type",
+      "property_type_localized": "Property Type (localized)",
+      "listing_type": "Listing Type",
+      "listing_type_localized": "Listing Type (localized)",
+      "city": "City",
+      "district": "District",
+      "address": "Address",
+      "source_site": "Source Site",
+      "url": "URL",
+      "scraped_at": "Scraped At",
+      "posted_date": "Posted Date"
+    },
+    "stats": {
+      "total_listings": "Total Listings",
+      "by_source": "By Source",
+      "by_property_type": "By Property Type",
+      "by_listing_type": "By Listing Type",
+      "top_cities": "Top Cities",
+      "price_statistics": "Price Statistics",
+      "average_price": "Average Price",
+      "minimum_price": "Minimum Price",
+      "maximum_price": "Maximum Price"
+    }
+  },
+  "languages": {
+    "en": "English",
+    "lv": "Latvian",
+    "ru": "Russian"
+  },
+  "properties": {
+    "types": {
+      "apartment": "Apartment",
+      "house": "House",
+      "commercial": "Commercial",
+      "land": "Land",
+      "office": "Office",
+      "warehouse": "Warehouse"
+    },
+    "listing_types": {
+      "sell": "For Sale",
+      "rent": "For Rent",
+      "sale": "For Sale"
+    }
+  },
+  "sources": {
+    "ss.com": "SS.com",
+    "city24.lv": "City24.lv",
+    "pp.lv": "PP.lv"
+  }
+}
